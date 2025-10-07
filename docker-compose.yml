@@ -1,0 +1,21 @@
+services:
+  auth-service:
+    build:
+      context: ./auth-service
+    image: pyms-auth-service:local
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-supersecret}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+      - USERS_JSON=${USERS_JSON:-[{"username":"admin","password":"Admin#123","role":"security_admin"},{"username":"viewer","password":"Viewer#123","role":"viewer"}]}
+    ports:
+      - "9001:9001"
+
+  resource-api:
+    build:
+      context: ./resource-api
+    image: pyms-resource-api:local
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-supersecret}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    ports:
+      - "9002:9002"
