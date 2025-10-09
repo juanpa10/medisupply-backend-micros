@@ -1,8 +1,8 @@
-# Python Microservices — Auth + Resource API (FastAPI)
+# Python Microservices — Auth + (New Micro) (Flask)
 
 ## Servicios
 - **auth-service** (puerto 9001): `/auth/login`, `/auth/verify` — emite y valida JWT (HS256) con claim `role`.
-- **resource-api** (puerto 9002): `/whoami` (requiere token) y `/admin/sensitive-op` (requiere `role=security_admin`).
+- **Api de ejemplo, compiar por cada micro** **resource-api** (puerto 9002): `/whoami` (requiere token) y `/admin/sensitive-op` (requiere `role=security_admin`).
 
 ## Ejecutar local con Docker
 ```bash
