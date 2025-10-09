@@ -7,16 +7,16 @@ import os, json, time, jwt
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "supersecret")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-USERS_JSON = os.environ.get("USERS_JSON", '[{"username":"admin","password":"Admin#123","role":"security_admin"},{"username":"viewer","password":"Viewer#123","role":"viewer"}]')
+USERS_JSON = os.environ.get("USERS_JSON", '[{"user":"admin","password":"Admin#123","role":"security_admin"},{"user":"viewer","password":"Viewer#123","role":"viewer"}]')
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class User(BaseModel):
-    username: str
+    user: str
     password: str
     role: str
 
 class LoginRequest(BaseModel):
-    username: str
+    user: str
     password: str
 
 class TokenResponse(BaseModel):
@@ -32,8 +32,8 @@ def make_users() -> List[User]:
     return users
 
 USERS = make_users()
-HASHED = {u.username: pwd_ctx.hash(u.password) for u in USERS}
-ROLES = {u.username: u.role for u in USERS}
+HASHED = {u.user: pwd_ctx.hash(u.password) for u in USERS}
+ROLES = {u.user: u.role for u in USERS}
 
 app = FastAPI(title="Auth Service (FastAPI)")
 
