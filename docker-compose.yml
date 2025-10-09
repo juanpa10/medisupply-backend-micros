@@ -8,7 +8,6 @@ services:
     environment:
       JWT_SECRET: "supersecret"
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
-      # JSON plegado para evitar errores de comillas en Windows
       USERS_JSON: >-
         [{"user":"admin","password":"Admin#123","role":"security_admin"},
          {"user":"viewer","password":"Viewer#123","role":"viewer"}]
