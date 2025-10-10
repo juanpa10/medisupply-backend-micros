@@ -5,6 +5,12 @@ on:
     branches: ["main"]
   workflow_dispatch: {}
 
+# Variables de organización (ponlas en repo Settings → Actions → Variables)
+#  - AWS_REGION: us-east-1
+#  - ECR_REPOSITORY: medisupply
+#  - CLUSTER: medisupply
+#  - ALB_NAME: portal-web-alb
+#  - ECS_SG_ID: sg-xxxxxxxx   (Security Group de tareas ECS)
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -13,28 +19,38 @@ env:
   ECS_SG_ID: ${{ vars.ECS_SG_ID }}
 
 jobs:
-  # Descubre microservicios por convención (services/* con Dockerfile + service.json)
   discover:
+    name: Discover microservices
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.mk.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-      - id: mk
+
+      - name: Build matrix from services/*
+        id: mk
         run: |
           set -e
+          if [ ! -d services ]; then
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           arr="[]"
+          # Cada micro debe tener services/<name>/{Dockerfile,service.json}
           for dir in $(find services -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort); do
             if [ -f "$dir/Dockerfile" ] && [ -f "$dir/service.json" ]; then
               name=$(jq -r '.name' "$dir/service.json")
               arr=$(jq --arg n "$name" --arg c "$dir" '. + [{"name":$n,"context":$c}]' <<<"$arr")
             fi
           done
-          echo "Found services:"
+
+          echo "Servicios detectados:"
           echo "$arr" | jq .
-          echo "matrix={\"include\":$(jq -c <<<"$arr")}" >> $GITHUB_OUTPUT
+          echo "matrix={\"include\":$(jq -c <<<"$arr")}" >> "$GITHUB_OUTPUT"
 
   build_push:
+    name: Build & Push to ECR
     needs: discover
     if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-latest
@@ -56,7 +72,7 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Docker metadata
+      - name: Docker metadata (${{ matrix.name }})
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -83,6 +99,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   deploy:
+    name: Deploy to ECS/ALB
     needs: [discover, build_push]
     if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-latest
@@ -98,13 +115,12 @@ jobs:
           role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy each service
+      - name: Deploy each micro (task def + service + ALB rule)
         env:
           ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
           set -e
 
-          # Utilidades
           alb_arn=$(aws elbv2 describe-load-balancers --names "${ALB_NAME}" --query 'LoadBalancers[0].LoadBalancerArn' --output text --region "${AWS_REGION}")
           listener_arn=$(aws elbv2 describe-listeners --load-balancer-arn "$alb_arn" --query 'Listeners[?Port==`80`].ListenerArn' --output text --region "${AWS_REGION}")
           vpc_id=$(aws elbv2 describe-load-balancers --load-balancer-arns "$alb_arn" --query 'LoadBalancers[0].VpcId' --output text --region "${AWS_REGION}")
@@ -116,7 +132,7 @@ jobs:
 
             name=$(jq -r '.name' "$dir/service.json")
             containerPort=$(jq -r '.containerPort' "$dir/service.json")
-            pathPrefix=$(jq -r '.pathPrefix' "$dir/service.json")
+            pathPrefix=$(jq -r '.pathPrefix' "$dir.service.json" 2>/dev/null || jq -r '.pathPrefix' "$dir/service.json")
             healthPath=$(jq -r '.healthPath' "$dir/service.json")
             cpu=$(jq -r '.cpu' "$dir/service.json")
             memory=$(jq -r '.memory' "$dir/service.json")
@@ -127,9 +143,9 @@ jobs:
             tg_name="${name}-tg"
             svc_name="${name}-svc"
 
-            echo "==> Deploying ${name} (port ${containerPort}, path ${pathPrefix})"
+            echo "==> Deploy ${name} | port=${containerPort} | path=${pathPrefix}"
 
-            # Log group idempotente
+            # Log group (idempotente)
             aws logs create-log-group --log-group-name "$log_group" --region "${AWS_REGION}" 2>/dev/null || true
 
             # Target group (crear si no existe)
@@ -148,58 +164,72 @@ jobs:
                 --output text --region "${AWS_REGION}")
             fi
 
-            # Regla del listener para pathPrefix (crear si falta)
-            # buscamos si ya existe una regla apuntando a este TG o con ese path
-            existing_rule=$(aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?contains(Conditions[?Field=='path-pattern'].Values[],'${pathPrefix%*}')] | [0].RuleArn" --output text --region "${AWS_REGION}" 2>/dev/null || true)
-            if [ "$existing_rule" = "None" ] || [ -z "$existing_rule" ]; then
-              # elige una prioridad alta libre (empezamos en 200 y subimos)
-              prio=200
-              while aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?Priority=='${prio}']" --output text --region "${AWS_REGION}" | grep -q .; do
-                prio=$((prio+1))
-              done
-              aws elbv2 create-rule \
-                --listener-arn "$listener_arn" \
-                --priority $prio \
-                --conditions Field=path-pattern,Values="${pathPrefix}" \
-                --actions Type=forward,TargetGroupArn="$tg_arn" \
-                --region "${AWS_REGION}" >/dev/null
-            else
-              # opcional: podríamos modificar la regla para asegurar que apunte a tg_arn
-              true
+            # Regla de ALB (solo si pathPrefix no está vacío)
+            if [ -n "$pathPrefix" ] && [ "$pathPrefix" != "null" ]; then
+              # ¿Existe ya una regla con ese path?
+              existing_rule=$(aws elbv2 describe-rules --listener-arn "$listener_arn" \
+                --query "Rules[?contains(join('', Conditions[?Field=='path-pattern'].Values[]),'${pathPrefix%*}')] | [0].RuleArn" \
+                --output text --region "${AWS_REGION}" 2>/dev/null || true)
+
+              if [ "$existing_rule" = "None" ] || [ -z "$existing_rule" ]; then
+                # Busca prioridad libre a partir de 200
+                prio=200
+                while aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?Priority=='${prio}']" --output text --region "${AWS_REGION}" | grep -q .; do
+                  prio=$((prio+1))
+                done
+                aws elbv2 create-rule \
+                  --listener-arn "$listener_arn" \
+                  --priority $prio \
+                  --conditions Field=path-pattern,Values="${pathPrefix}" \
+                  --actions Type=forward,TargetGroupArn="$tg_arn" \
+                  --region "${AWS_REGION}" >/dev/null
+              fi
             fi
 
-            # Task definition (registra siempre con la imagen latest)
+            # Task Definition con jq (evita problemas de here-doc/YAML)
             td_file=$(mktemp)
-            cat > "$td_file" <<EOF
-{
-  "family": "${name}",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "${cpu}",
-  "memory": "${memory}",
-  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole",
-  "containerDefinitions": [{
-    "name": "${name}",
-    "image": "${image}",
-    "portMappings": [{ "containerPort": ${containerPort}, "protocol": "tcp" }],
-    "essential": true,
-    "logConfiguration": {
-      "logDriver": "awslogs",
-      "options": {
-        "awslogs-group": "${log_group}",
-        "awslogs-region": "${AWS_REGION}",
-        "awslogs-stream-prefix": "${name}"
-      }
-    }
-  }]
-}
-EOF
-            rev=$(aws ecs register-task-definition --cli-input-json file://"$td_file" --query 'taskDefinition.revision' --output text --region "${AWS_REGION}")
+            jq -n \
+              --arg family "$name" \
+              --arg cpu "$cpu" \
+              --arg memory "$memory" \
+              --arg execRole "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole" \
+              --arg cname "$name" \
+              --arg image "$image" \
+              --arg log_group "$log_group" \
+              --arg region "$AWS_REGION" \
+              --arg stream "$name" \
+              --argjson cport ${containerPort} \
+            '{
+              family: $family,
+              networkMode: "awsvpc",
+              requiresCompatibilities: ["FARGATE"],
+              cpu: $cpu,
+              memory: $memory,
+              executionRoleArn: $execRole,
+              containerDefinitions: [{
+                name: $cname,
+                image: $image,
+                portMappings: [{ containerPort: $cport, protocol: "tcp" }],
+                essential: true,
+                logConfiguration: {
+                  logDriver: "awslogs",
+                  options: {
+                    "awslogs-group": $log_group,
+                    "awslogs-region": $region,
+                    "awslogs-stream-prefix": $stream
+                  }
+                }
+              }]
+            }' > "$td_file"
+
+            rev=$(aws ecs register-task-definition \
+              --cli-input-json file://"$td_file" \
+              --query 'taskDefinition.revision' --output text --region "${AWS_REGION}")
             rm -f "$td_file"
 
-            # Crear servicio si no existe; si existe, actualizar
-            svc=$(aws ecs describe-services --cluster "${CLUSTER}" --services "${svc_name}" --query 'services[0].status' --output text --region "${AWS_REGION}" 2>/dev/null || true)
-            if [ "$svc" = "None" ] || [ -z "$svc" ]; then
+            # Crear service si no existe; si existe, actualizar & redeploy
+            svc_status=$(aws ecs describe-services --cluster "${CLUSTER}" --services "${svc_name}" --query 'services[0].status' --output text --region "${AWS_REGION}" 2>/dev/null || true)
+            if [ "$svc_status" = "None" ] || [ -z "$svc_status" ]; then
               aws ecs create-service \
                 --cluster "${CLUSTER}" \
                 --service-name "${svc_name}" \
