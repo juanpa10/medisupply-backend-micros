@@ -5,12 +5,12 @@ on:
     branches: ["main"]
   workflow_dispatch: {}
 
-# Variables de organización (ponlas en repo Settings → Actions → Variables)
+# Variables (Settings ➜ Actions ➜ Variables)
 #  - AWS_REGION: us-east-1
 #  - ECR_REPOSITORY: medisupply
 #  - CLUSTER: medisupply
 #  - ALB_NAME: portal-web-alb
-#  - ECS_SG_ID: sg-xxxxxxxx   (Security Group de tareas ECS)
+#  - ECS_SG_ID: sg-xxxxxxxx   # Security Group de TAREAS ECS (no el del ALB)
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -27,26 +27,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build matrix from services/*
+      - name: Show repo tree (debug)
+        run: |
+          pwd
+          ls -la
+          echo "---- first level ----"
+          find . -maxdepth 1 -type d -not -path './.git' -print
+          echo "---- dockerfiles (any depth) ----"
+          git ls-files '*Dockerfile' || true
+
+      - name: Build matrix scanning any subfolder with Dockerfile + service.json
         id: mk
         run: |
           set -e
-          if [ ! -d services ]; then
-            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          arr='[]'
 
-          arr="[]"
-          # Cada micro debe tener services/<name>/{Dockerfile,service.json}
-          for dir in $(find services -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort); do
-            if [ -f "$dir/Dockerfile" ] && [ -f "$dir/service.json" ]; then
+          # Recorre TODOS los Dockerfile del repo (excluye .github)
+          while IFS= read -r dockerfile; do
+            dir=$(dirname "$dockerfile")
+
+            case "$dir" in
+              ./.github/*) continue ;;  # saltar pipelines/infra
+            esac
+
+            if [ -f "$dir/service.json" ]; then
               name=$(jq -r '.name' "$dir/service.json")
               arr=$(jq --arg n "$name" --arg c "$dir" '. + [{"name":$n,"context":$c}]' <<<"$arr")
+              echo "✔ Found service: $name at $dir"
+            else
+              echo "⚠️  $dir tiene Dockerfile pero NO service.json (se ignora)"
             fi
-          done
+          done < <(git ls-files '*Dockerfile')
 
           echo "Servicios detectados:"
           echo "$arr" | jq .
+
           echo "matrix={\"include\":$(jq -c <<<"$arr")}" >> "$GITHUB_OUTPUT"
 
   build_push:
@@ -127,12 +142,17 @@ jobs:
           subnets=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" --query 'Subnets[?MapPublicIpOnLaunch==`true`].SubnetId' --output text --region "${AWS_REGION}")
           subnets_csv=$(echo "$subnets" | sed 's/ /,/g')
 
-          for dir in $(find services -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort); do
-            [ -f "$dir/Dockerfile" ] && [ -f "$dir/service.json" ] || continue
+          # Recorre los servicios detectados (misma lógica que discover)
+          while IFS= read -r dockerfile; do
+            dir=$(dirname "$dockerfile")
+            case "$dir" in
+              ./.github/*) continue ;;
+            esac
+            [ -f "$dir/service.json" ] || continue
 
             name=$(jq -r '.name' "$dir/service.json")
             containerPort=$(jq -r '.containerPort' "$dir/service.json")
-            pathPrefix=$(jq -r '.pathPrefix' "$dir.service.json" 2>/dev/null || jq -r '.pathPrefix' "$dir/service.json")
+            pathPrefix=$(jq -r '.pathPrefix' "$dir/service.json")
             healthPath=$(jq -r '.healthPath' "$dir/service.json")
             cpu=$(jq -r '.cpu' "$dir/service.json")
             memory=$(jq -r '.memory' "$dir/service.json")
@@ -164,7 +184,7 @@ jobs:
                 --output text --region "${AWS_REGION}")
             fi
 
-            # Regla de ALB (solo si pathPrefix no está vacío)
+            # Regla de ALB (si pathPrefix no es vacío)
             if [ -n "$pathPrefix" ] && [ "$pathPrefix" != "null" ]; then
               # ¿Existe ya una regla con ese path?
               existing_rule=$(aws elbv2 describe-rules --listener-arn "$listener_arn" \
@@ -172,7 +192,7 @@ jobs:
                 --output text --region "${AWS_REGION}" 2>/dev/null || true)
 
               if [ "$existing_rule" = "None" ] || [ -z "$existing_rule" ]; then
-                # Busca prioridad libre a partir de 200
+                # Buscar prioridad libre a partir de 200
                 prio=200
                 while aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?Priority=='${prio}']" --output text --region "${AWS_REGION}" | grep -q .; do
                   prio=$((prio+1))
@@ -186,7 +206,7 @@ jobs:
               fi
             fi
 
-            # Task Definition con jq (evita problemas de here-doc/YAML)
+            # Task Definition con jq (evitamos here-docs)
             td_file=$(mktemp)
             jq -n \
               --arg family "$name" \
@@ -227,7 +247,7 @@ jobs:
               --query 'taskDefinition.revision' --output text --region "${AWS_REGION}")
             rm -f "$td_file"
 
-            # Crear service si no existe; si existe, actualizar & redeploy
+            # Crear/actualizar servicio ECS
             svc_status=$(aws ecs describe-services --cluster "${CLUSTER}" --services "${svc_name}" --query 'services[0].status' --output text --region "${AWS_REGION}" 2>/dev/null || true)
             if [ "$svc_status" = "None" ] || [ -z "$svc_status" ]; then
               aws ecs create-service \
@@ -250,4 +270,4 @@ jobs:
             fi
 
             echo "✔ ${name} deployed"
-          done
+          done < <(git ls-files '*Dockerfile')
