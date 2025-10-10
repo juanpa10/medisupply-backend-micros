@@ -21,3 +21,59 @@ services:
     environment:
       JWT_SECRET: "supersecret"
       ALLOWED_ORIGINS: "*"
+
+  
+  roles-api:
+    build:
+      context: ./roles-api
+    image: pyms-roles-api:local
+    environment:
+      # VALIDACIÓN JWT LOCAL 
+      JWT_SECRET: "supersecret"
+      JWT_ALGORITHM: "HS256"
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      FLASK_APP: app.app:app
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "9003:9003"
+    depends_on:
+      medisupply-db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:9003/api/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  medisupply-db:
+    image: postgres:16-alpine
+    container_name: medisupply-db
+    environment:
+      - POSTGRES_DB=medisupplydb
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=app
+    ports:
+      - "5432:5432"
+    volumes:
+      - medisupply_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d medisupplydb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  medisupply_pg_data:
