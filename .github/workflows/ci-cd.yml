@@ -10,7 +10,7 @@ on:
 #  - ECR_REPOSITORY: medisupply
 #  - CLUSTER: medisupply
 #  - ALB_NAME: portal-web-alb
-#  - ECS_SG_ID: sg-xxxxxxxx   # Security Group de TAREAS ECS (no el del ALB)
+#  - ECS_SG_ID: sg-xxxxxxxx   # SG de TAREAS ECS (no el del ALB)
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -41,15 +41,10 @@ jobs:
         run: |
           set -e
           arr='[]'
-
           # Recorre TODOS los Dockerfile del repo (excluye .github)
           while IFS= read -r dockerfile; do
             dir=$(dirname "$dockerfile")
-
-            case "$dir" in
-              ./.github/*) continue ;;  # saltar pipelines/infra
-            esac
-
+            case "$dir" in ./.github/*) continue ;; esac
             if [ -f "$dir/service.json" ]; then
               name=$(jq -r '.name' "$dir/service.json")
               arr=$(jq --arg n "$name" --arg c "$dir" '. + [{"name":$n,"context":$c}]' <<<"$arr")
@@ -58,10 +53,7 @@ jobs:
               echo "⚠️  $dir tiene Dockerfile pero NO service.json (se ignora)"
             fi
           done < <(git ls-files '*Dockerfile')
-
-          echo "Servicios detectados:"
-          echo "$arr" | jq .
-
+          echo "Servicios detectados:"; echo "$arr" | jq .
           echo "matrix={\"include\":$(jq -c <<<"$arr")}" >> "$GITHUB_OUTPUT"
 
   build_push:
@@ -69,9 +61,7 @@ jobs:
     needs: discover
     if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    permissions: { id-token: write, contents: read }
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
@@ -118,9 +108,7 @@ jobs:
     needs: [discover, build_push]
     if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    permissions: { id-token: write, contents: read }
     steps:
       - uses: actions/checkout@v4
 
@@ -136,18 +124,49 @@ jobs:
         run: |
           set -e
 
-          alb_arn=$(aws elbv2 describe-load-balancers --names "${ALB_NAME}" --query 'LoadBalancers[0].LoadBalancerArn' --output text --region "${AWS_REGION}")
-          listener_arn=$(aws elbv2 describe-listeners --load-balancer-arn "$alb_arn" --query 'Listeners[?Port==`80`].ListenerArn' --output text --region "${AWS_REGION}")
-          vpc_id=$(aws elbv2 describe-load-balancers --load-balancer-arns "$alb_arn" --query 'LoadBalancers[0].VpcId' --output text --region "${AWS_REGION}")
-          subnets=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" --query 'Subnets[?MapPublicIpOnLaunch==`true`].SubnetId' --output text --region "${AWS_REGION}")
-          subnets_csv=$(echo "$subnets" | sed 's/ /,/g')
+          # --- ALB, Listener y VPC ---
+          alb_arn=$(aws elbv2 describe-load-balancers \
+            --names "${ALB_NAME}" \
+            --query 'LoadBalancers[0].LoadBalancerArn' \
+            --output text --region "${AWS_REGION}")
 
-          # Recorre los servicios detectados (misma lógica que discover)
+          listener_arn=$(aws elbv2 describe-listeners \
+            --load-balancer-arn "$alb_arn" \
+            --query 'Listeners[?Port==`80`].ListenerArn' \
+            --output text --region "${AWS_REGION}")
+
+          vpc_id=$(aws elbv2 describe-load-balancers \
+            --load-balancer-arns "$alb_arn" \
+            --query 'LoadBalancers[0].VpcId' \
+            --output text --region "${AWS_REGION}")
+
+          # --- Subnets públicas (robusto) ---
+          readarray -t subnets_arr < <(
+            aws ec2 describe-subnets \
+              --filters "Name=vpc-id,Values=${vpc_id}" "Name=map-public-ip-on-launch,Values=true" \
+              --query 'Subnets[].SubnetId' \
+              --output text --region "${AWS_REGION}" | tr '\t' '\n' | sed '/^$/d'
+          )
+          if [ ${#subnets_arr[@]} -eq 0 ]; then
+            readarray -t subnets_arr < <(
+              aws ec2 describe-subnets \
+                --filters "Name=vpc-id,Values=${vpc_id}" \
+                --query 'Subnets[].SubnetId' \
+                --output text --region "${AWS_REGION}" | tr '\t' '\n' | sed '/^$/d'
+            )
+          fi
+          if [ ${#subnets_arr[@]} -eq 0 ]; then
+            echo "❌ No se encontraron Subnets en la VPC ${vpc_id}"; exit 1
+          fi
+          subnets_csv=$(IFS=,; echo "${subnets_arr[*]}")
+          netconf="awsvpcConfiguration={subnets=[${subnets_csv}],securityGroups=[${ECS_SG_ID}],assignPublicIp=ENABLED}"
+          echo "ℹ  Subnets detectadas: ${subnets_csv}"
+          echo "ℹ  Network config: $netconf"
+
+          # --- Recorre servicios (misma lógica que discover) ---
           while IFS= read -r dockerfile; do
             dir=$(dirname "$dockerfile")
-            case "$dir" in
-              ./.github/*) continue ;;
-            esac
+            case "$dir" in ./.github/*) continue ;; esac
             [ -f "$dir/service.json" ] || continue
 
             name=$(jq -r '.name' "$dir/service.json")
@@ -186,13 +205,10 @@ jobs:
 
             # Regla de ALB (si pathPrefix no es vacío)
             if [ -n "$pathPrefix" ] && [ "$pathPrefix" != "null" ]; then
-              # ¿Existe ya una regla con ese path?
               existing_rule=$(aws elbv2 describe-rules --listener-arn "$listener_arn" \
                 --query "Rules[?contains(join('', Conditions[?Field=='path-pattern'].Values[]),'${pathPrefix%*}')] | [0].RuleArn" \
                 --output text --region "${AWS_REGION}" 2>/dev/null || true)
-
               if [ "$existing_rule" = "None" ] || [ -z "$existing_rule" ]; then
-                # Buscar prioridad libre a partir de 200
                 prio=200
                 while aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?Priority=='${prio}']" --output text --region "${AWS_REGION}" | grep -q .; do
                   prio=$((prio+1))
@@ -206,7 +222,7 @@ jobs:
               fi
             fi
 
-            # Task Definition con jq (evitamos here-docs)
+            # Task Definition con jq (sin here-docs)
             td_file=$(mktemp)
             jq -n \
               --arg family "$name" \
@@ -256,7 +272,7 @@ jobs:
                 --task-definition "${name}:${rev}" \
                 --desired-count ${desired} \
                 --launch-type FARGATE \
-                --network-configuration "awsvpcConfiguration={subnets=[$subnets_csv],securityGroups=[${ECS_SG_ID}],assignPublicIp=ENABLED}" \
+                --network-configuration "$netconf" \
                 --load-balancers "targetGroupArn=${tg_arn},containerName=${name},containerPort=${containerPort}" \
                 --region "${AWS_REGION}" >/dev/null
             else
