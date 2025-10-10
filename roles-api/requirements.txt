@@ -1,0 +1,7 @@
+flask==3.0.3
+SQLAlchemy==2.0.32
+pydantic==2.8.2
+email-validator==2.2.0
+PyJWT==2.9.0
+gunicorn==22.0.0
+psycopg2-binary==2.9.9
