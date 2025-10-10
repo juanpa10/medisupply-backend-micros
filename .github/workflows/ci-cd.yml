@@ -1,51 +1,53 @@
-name: CI & CD to AWS ECR (monorepo)
+name: Micros CI/CD → ECR + ECS (auto)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+  workflow_dispatch: {}
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: medisupply
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  CLUSTER: ${{ vars.CLUSTER }}
+  ALB_NAME: ${{ vars.ALB_NAME }}
+  ECS_SG_ID: ${{ vars.ECS_SG_ID }}
 
 jobs:
-  test_build_push:
+  # Descubre microservicios por convención (services/* con Dockerfile + service.json)
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.mk.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: mk
+        run: |
+          set -e
+          arr="[]"
+          for dir in $(find services -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort); do
+            if [ -f "$dir/Dockerfile" ] && [ -f "$dir/service.json" ]; then
+              name=$(jq -r '.name' "$dir/service.json")
+              arr=$(jq --arg n "$name" --arg c "$dir" '. + [{"name":$n,"context":$c}]' <<<"$arr")
+            fi
+          done
+          echo "Found services:"
+          echo "$arr" | jq .
+          echo "matrix={\"include\":$(jq -c <<<"$arr")}" >> $GITHUB_OUTPUT
+
+  build_push:
+    needs: discover
+    if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-
     strategy:
-      matrix:
-        include:
-          - name: auth-service
-            context: ./auth-service
-          - name: resource-api
-            context: ./resource-api
-
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # === TESTS (Python por servicio) ===
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install deps (${{ matrix.name }})
-        working-directory: ${{ matrix.context }}
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Run unit tests (${{ matrix.name }})
-        working-directory: ${{ matrix.context }}
-        run: |
-          if compgen -G "tests/**.py" > /dev/null; then pytest -q; else echo "No tests found, skipping"; fi
-
-      # === AWS OIDC ===
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
@@ -54,8 +56,7 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # === Docker metadata (prefijo por servicio) ===
-      - name: Docker metadata (${{ matrix.name }})
+      - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -68,12 +69,155 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build & Push (${{ matrix.name }})
+      - name: Build & Push ${{ matrix.name }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           push: true
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [discover, build_push]
+    if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy each service
+        env:
+          ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: |
+          set -e
+
+          # Utilidades
+          alb_arn=$(aws elbv2 describe-load-balancers --names "${ALB_NAME}" --query 'LoadBalancers[0].LoadBalancerArn' --output text --region "${AWS_REGION}")
+          listener_arn=$(aws elbv2 describe-listeners --load-balancer-arn "$alb_arn" --query 'Listeners[?Port==`80`].ListenerArn' --output text --region "${AWS_REGION}")
+          vpc_id=$(aws elbv2 describe-load-balancers --load-balancer-arns "$alb_arn" --query 'LoadBalancers[0].VpcId' --output text --region "${AWS_REGION}")
+          subnets=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=${vpc_id}" --query 'Subnets[?MapPublicIpOnLaunch==`true`].SubnetId' --output text --region "${AWS_REGION}")
+          subnets_csv=$(echo "$subnets" | sed 's/ /,/g')
+
+          for dir in $(find services -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort); do
+            [ -f "$dir/Dockerfile" ] && [ -f "$dir/service.json" ] || continue
+
+            name=$(jq -r '.name' "$dir/service.json")
+            containerPort=$(jq -r '.containerPort' "$dir/service.json")
+            pathPrefix=$(jq -r '.pathPrefix' "$dir/service.json")
+            healthPath=$(jq -r '.healthPath' "$dir/service.json")
+            cpu=$(jq -r '.cpu' "$dir/service.json")
+            memory=$(jq -r '.memory' "$dir/service.json")
+            desired=$(jq -r '.desiredCount' "$dir/service.json")
+
+            image="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${name}-latest"
+            log_group="/ecs/${name}"
+            tg_name="${name}-tg"
+            svc_name="${name}-svc"
+
+            echo "==> Deploying ${name} (port ${containerPort}, path ${pathPrefix})"
+
+            # Log group idempotente
+            aws logs create-log-group --log-group-name "$log_group" --region "${AWS_REGION}" 2>/dev/null || true
+
+            # Target group (crear si no existe)
+            tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text --region "${AWS_REGION}" 2>/dev/null || true)
+            if [ "$tg_arn" = "None" ] || [ -z "$tg_arn" ]; then
+              tg_arn=$(aws elbv2 create-target-group \
+                --name "$tg_name" \
+                --protocol HTTP \
+                --port ${containerPort} \
+                --vpc-id "$vpc_id" \
+                --target-type ip \
+                --health-check-path "${healthPath}" \
+                --health-check-port traffic-port \
+                --matcher HttpCode=200-399 \
+                --query 'TargetGroups[0].TargetGroupArn' \
+                --output text --region "${AWS_REGION}")
+            fi
+
+            # Regla del listener para pathPrefix (crear si falta)
+            # buscamos si ya existe una regla apuntando a este TG o con ese path
+            existing_rule=$(aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?contains(Conditions[?Field=='path-pattern'].Values[],'${pathPrefix%*}')] | [0].RuleArn" --output text --region "${AWS_REGION}" 2>/dev/null || true)
+            if [ "$existing_rule" = "None" ] || [ -z "$existing_rule" ]; then
+              # elige una prioridad alta libre (empezamos en 200 y subimos)
+              prio=200
+              while aws elbv2 describe-rules --listener-arn "$listener_arn" --query "Rules[?Priority=='${prio}']" --output text --region "${AWS_REGION}" | grep -q .; do
+                prio=$((prio+1))
+              done
+              aws elbv2 create-rule \
+                --listener-arn "$listener_arn" \
+                --priority $prio \
+                --conditions Field=path-pattern,Values="${pathPrefix}" \
+                --actions Type=forward,TargetGroupArn="$tg_arn" \
+                --region "${AWS_REGION}" >/dev/null
+            else
+              # opcional: podríamos modificar la regla para asegurar que apunte a tg_arn
+              true
+            fi
+
+            # Task definition (registra siempre con la imagen latest)
+            td_file=$(mktemp)
+            cat > "$td_file" <<EOF
+{
+  "family": "${name}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "${cpu}",
+  "memory": "${memory}",
+  "executionRoleArn": "arn:aws:iam::${ACCOUNT_ID}:role/ecsTaskExecutionRole",
+  "containerDefinitions": [{
+    "name": "${name}",
+    "image": "${image}",
+    "portMappings": [{ "containerPort": ${containerPort}, "protocol": "tcp" }],
+    "essential": true,
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${log_group}",
+        "awslogs-region": "${AWS_REGION}",
+        "awslogs-stream-prefix": "${name}"
+      }
+    }
+  }]
+}
+EOF
+            rev=$(aws ecs register-task-definition --cli-input-json file://"$td_file" --query 'taskDefinition.revision' --output text --region "${AWS_REGION}")
+            rm -f "$td_file"
+
+            # Crear servicio si no existe; si existe, actualizar
+            svc=$(aws ecs describe-services --cluster "${CLUSTER}" --services "${svc_name}" --query 'services[0].status' --output text --region "${AWS_REGION}" 2>/dev/null || true)
+            if [ "$svc" = "None" ] || [ -z "$svc" ]; then
+              aws ecs create-service \
+                --cluster "${CLUSTER}" \
+                --service-name "${svc_name}" \
+                --task-definition "${name}:${rev}" \
+                --desired-count ${desired} \
+                --launch-type FARGATE \
+                --network-configuration "awsvpcConfiguration={subnets=[$subnets_csv],securityGroups=[${ECS_SG_ID}],assignPublicIp=ENABLED}" \
+                --load-balancers "targetGroupArn=${tg_arn},containerName=${name},containerPort=${containerPort}" \
+                --region "${AWS_REGION}" >/dev/null
+            else
+              aws ecs update-service \
+                --cluster "${CLUSTER}" \
+                --service "${svc_name}" \
+                --task-definition "${name}:${rev}" \
+                --desired-count ${desired} \
+                --force-new-deployment \
+                --region "${AWS_REGION}" >/dev/null
+            fi
+
+            echo "✔ ${name} deployed"
+          done
