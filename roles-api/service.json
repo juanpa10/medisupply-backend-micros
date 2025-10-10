@@ -1,0 +1,9 @@
+{
+  "name": "roles-service",
+  "containerPort": 9003,
+  "pathPrefix": "/roles/*",
+  "healthPath": "/",
+  "cpu": 256,
+  "memory": 512,
+  "desiredCount": 1
+}
