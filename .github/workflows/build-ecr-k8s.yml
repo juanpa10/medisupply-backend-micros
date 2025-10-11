@@ -1,4 +1,4 @@
-name: Build & Push to ECR (k8s)
+name: Build & Push to ECR (Kubernetes)
 
 on:
   push:
