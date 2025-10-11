@@ -3,18 +3,27 @@ kind: Ingress
 metadata:
   name: medisupply-ingress
   namespace: medisupply
-  annotations:
-    kubernetes.io/ingress.class: traefik
 spec:
+  ingressClassName: traefik
   rules:
     - http:
         paths:
           - path: /auth
             pathType: Prefix
-            backend: { service: { name: auth-service, port: { number: 9001 } } }
+            backend:
+              service:
+                name: auth-service
+                port: { number: 9001 }
           - path: /roles
             pathType: Prefix
-            backend: { service: { name: roles-api, port: { number: 9003 } } }
+            backend:
+              service:
+                name: roles-api
+                port: { number: 9003 }
           - path: /resource
             pathType: Prefix
-            backend: { service: { name: resource-api, port: { number: 9002 } } }
+            backend:
+              service:
+                name: resource-api
+                port: { number: 9002 }
+
