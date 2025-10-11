@@ -1,0 +1,138 @@
+name: Build & Push to ECR (k8s)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  TAG_PREFIX: k8s-
+
+jobs:
+  discover:
+    name: Discover services
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.mk.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build matrix scanning any subfolder with Dockerfile + service.json
+        id: mk
+        run: |
+          set -e
+          arr='[]'
+          while IFS= read -r dockerfile; do
+            dir=$(dirname "$dockerfile")
+            case "$dir" in ./.github/*) continue ;; esac
+            if [ -f "$dir/service.json" ] && [ -f "$dockerfile" ]; then
+              name=$(jq -r '.name' "$dir/service.json")
+              arr=$(jq --arg n "$name" --arg c "$dir" '. + [{"name":$n,"context":$c}]' <<<"$arr")
+              echo "✔ Found service: $name at $dir"
+            fi
+          done < <(git ls-files '*Dockerfile')
+          echo "matrix={"include":$(jq -c <<<"$arr")}" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Unit tests per service
+    needs: discover
+    if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps (if requirements.txt exists)
+        working-directory: ${{ matrix.context }}
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt — skipping install."
+          fi
+      - name: Run tests (if present)
+        working-directory: ${{ matrix.context }}
+        run: |
+          if [ -d tests ] || ls -1 *test*.py test_*.py 2>/dev/null | grep -q .; then
+            pip install pytest pytest-cov
+            export PYTHONPATH="${PYTHONPATH}:$GITHUB_WORKSPACE/${{ matrix.context }}"
+            pytest --cov=. --cov-report=term-missing -q
+          else
+            echo "No tests found — skipping."
+          fi
+
+  build_push:
+    name: Build & Push to ECR
+    needs: [discover, test]
+    if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute tags (NO latest/branch)
+        id: tags
+        run: |
+          SHA="${{ github.sha }}"
+          SVC="${{ matrix.name }}"
+          PREFIX="${{ env.TAG_PREFIX }}"
+          SHORT=${SHA::12}
+          echo "tags=${PREFIX}${SVC}-${SHA},${PREFIX}${SVC}-${SHORT}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip push if tag exists (idempotent)
+        id: check
+        run: |
+          IFS=',' read -r TAG1 TAG2 <<< "${{ steps.tags.outputs.tags }}"
+          REPO="${{ env.ECR_REPOSITORY }}"
+          set -e
+          for T in "$TAG1" "$TAG2"; do
+            found=$(aws ecr describe-images               --repository-name "$REPO"               --image-ids imageTag="$T"               --query 'imageDetails[0].imageDigest'               --output text 2>/dev/null || true)
+            if [ -n "$found" ] && [ "$found" != "None" ]; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "EXISTS_TAG=$T" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+
+      - name: Set up Buildx
+        if: steps.check.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push ${{ matrix.name }}
+        if: steps.check.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.tags }}
+
+      - name: Log when skipped (already exists)
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          echo "⏩ Skip push: tag already exists → ${{ steps.check.outputs.EXISTS_TAG }}"
