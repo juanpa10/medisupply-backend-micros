@@ -31,7 +31,7 @@ def users_with_roles():
 
 @bp.put("/users/<int:uid>/roles-permissions")
 @require_auth
-#@require_role("security_admin")
+@require_role("security_admin")
 def set_user_roles_permissions(uid:int):
     data = get_json()
     err = require_fields(data, ["assignments"])
