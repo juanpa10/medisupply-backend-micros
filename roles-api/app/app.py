@@ -16,6 +16,11 @@ def create_app():
     Base.metadata.create_all(bind=engine)
     svc.seed()
     app.register_blueprint(bp)
+
+    @app.get("/health")
+    def health_root():
+        return {"status": "alive"}
+
     return app
 
 app = create_app()
