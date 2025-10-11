@@ -82,35 +82,52 @@ jobs:
             SHA="${{ github.event.workflow_run.head_sha }}"
 
             # despliegue dinámico: cada carpeta de servicio (excepto db y yamls sueltos)
+            # despliegue dinámico: cada carpeta de servicio (excepto db y yamls sueltos)
             if [ -d "$BASE/k8s" ]; then
               for d in $(ls -1 "$BASE/k8s"); do
                 if [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
                   continue
                 fi
                 if [ -d "$BASE/k8s/$d" ] && [ -f "$BASE/k8s/$d/service.yaml" ] && [ -f "$BASE/k8s/$d/deployment.yaml" ]; then
-                  echo ">> Deploy service: $d"
+                  echo ">> Deploy service folder: $d"
 
-                  # espera imagen en ECR con prefijo k8s-
+                  # --- overrides opcionales ---
+                  IMG_NAME="$d"   # por defecto usamos nombre de carpeta para imagen
+                  if [ -f "$BASE/k8s/$d/image.txt" ]; then
+                    IMG_NAME="$(tr -d ' \n\r' < "$BASE/k8s/$d/image.txt")"
+                  fi
+
+                  DEPLOY_NAME="$d"  # por defecto el Deployment se llama como la carpeta
+                  if [ -f "$BASE/k8s/$d/deploy.name" ]; then
+                    DEPLOY_NAME="$(tr -d ' \n\r' < "$BASE/k8s/$d/deploy.name")"
+                  fi
+
+                  echo "   ECR image tag base: ${TAG_PREFIX}${IMG_NAME}-${SHA}"
+                  echo "   K8s deployment:     ${DEPLOY_NAME}"
+
+                  # espera imagen en ECR con el nombre correcto
                   for i in $(seq 1 30); do
                     ok=$(aws ecr describe-images \
-                         --repository-name "$ECR_REPO" \
-                         --image-ids imageTag="${TAG_PREFIX}${d}-${SHA}" \
-                         --query 'imageDetails[0].imageDigest' \
-                         --output text 2>/dev/null || true)
+                        --repository-name "$ECR_REPO" \
+                        --image-ids imageTag="${TAG_PREFIX}${IMG_NAME}-${SHA}" \
+                        --query 'imageDetails[0].imageDigest' \
+                        --output text 2>/dev/null || true)
                     if [ -n "$ok" ] && [ "$ok" != "None" ]; then
-                      echo "   ✔ image ${TAG_PREFIX}${d}-${SHA} found"
+                      echo "   ✔ image ${TAG_PREFIX}${IMG_NAME}-${SHA} found"
                       break
                     fi
-                    echo "   …waiting image ${TAG_PREFIX}${d}-${SHA} ($i/30)"; sleep 4
+                    echo "   …waiting image ${TAG_PREFIX}${IMG_NAME}-${SHA} ($i/30)"; sleep 4
                   done
 
+                  # aplica manifests y cambia imagen del deployment real
                   sudo k3s kubectl apply -f "$BASE/k8s/$d/service.yaml"
                   sudo k3s kubectl apply -f "$BASE/k8s/$d/deployment.yaml"
 
-                  CNAME=$(sudo k3s kubectl -n medisupply get deploy/$d -o jsonpath='{.spec.template.spec.containers[0].name}')
-                  IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${d}-${SHA}"
-                  sudo k3s kubectl -n medisupply set image deploy/$d $CNAME=$IMG
-                  sudo k3s kubectl -n medisupply rollout status deploy/$d --timeout=180s
+                  CNAME=$(sudo k3s kubectl -n medisupply get deploy/${DEPLOY_NAME} -o jsonpath='{.spec.template.spec.containers[0].name}')
+                  IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}"
+                  sudo k3s kubectl -n medisupply set image deploy/${DEPLOY_NAME} $CNAME=$IMG
+                  sudo k3s kubectl -n medisupply rollout status deploy/${DEPLOY_NAME} --timeout=180s
                 fi
               done
-            fi
+fi
+
