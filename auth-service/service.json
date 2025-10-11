@@ -1,8 +1,8 @@
 {
   "name": "login-service",
   "containerPort": 9001,
-  "pathPrefix": "/login/*",
-  "healthPath": "/login/health",
+  "pathPrefix": "/auth/*",
+  "healthPath": "/health",
   "cpu": 256,
   "memory": 512,
   "desiredCount": 1
