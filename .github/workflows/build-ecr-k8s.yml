@@ -1,4 +1,4 @@
-name: Build & Push to ECR (k8s, no-collision)
+name: Build & Push to ECR (k8s)
 
 on:
   push:
