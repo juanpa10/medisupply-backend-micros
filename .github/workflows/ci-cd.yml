@@ -56,9 +56,45 @@ jobs:
           echo "Servicios detectados:"; echo "$arr" | jq .
           echo "matrix={\"include\":$(jq -c <<<"$arr")}" >> "$GITHUB_OUTPUT"
 
+  test:
+    name: Unit tests (pytest) per micro
+    needs: discover
+    if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps if requirements.txt exists
+        working-directory: ${{ matrix.context }}
+        run: |
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt in $PWD — skipping deps install."
+          fi
+          
+      - name: Run tests with coverage
+        working-directory: ${{ matrix.context }}
+        run: |
+          if [ -d tests ] || ls -1 *test*.py test_*.py 2>/dev/null | grep -q .; then
+            pip install pytest-cov
+            pytest --cov=. --cov-report=term-missing -q
+          else
+            echo "No tests found — skipping coverage."
+          fi    
+
   build_push:
     name: Build & Push to ECR
-    needs: discover
+    needs: [discover, test]
     if: ${{ needs.discover.outputs.matrix != '' && needs.discover.outputs.matrix != '{"include":[]}' }}
     runs-on: ubuntu-latest
     permissions: { id-token: write, contents: read }
@@ -160,8 +196,8 @@ jobs:
           fi
           subnets_csv=$(IFS=,; echo "${subnets_arr[*]}")
           netconf="awsvpcConfiguration={subnets=[${subnets_csv}],securityGroups=[${ECS_SG_ID}],assignPublicIp=ENABLED}"
-          echo "ℹ  Subnets detectadas: ${subnets_csv}"
-          echo "ℹ  Network config: $netconf"
+          echo "ℹ️  Subnets detectadas: ${subnets_csv}"
+          echo "ℹ️  Network config: $netconf"
 
           # --- Recorre servicios (misma lógica que discover) ---
           while IFS= read -r dockerfile; do
