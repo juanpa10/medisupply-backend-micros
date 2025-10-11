@@ -48,6 +48,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
           script_stop: true
+          envs: AWS_REGION,AWS_ACCOUNT_ID,ECR_REPO,TAG_PREFIX
           script: |
             set -e
             BASE="/tmp/medisupply/out/deploy-medisupply"
