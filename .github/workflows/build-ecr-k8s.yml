@@ -99,16 +99,19 @@ jobs:
           SVC="${{ matrix.name }}"
           PREFIX="${{ env.TAG_PREFIX }}"
           SHORT=${SHA::12}
-          echo "tags=${PREFIX}${SVC}-${SHA},${PREFIX}${SVC}-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "TAG1=${PREFIX}${SVC}-${SHA}"   >> "$GITHUB_OUTPUT"
+          echo "TAG2=${PREFIX}${SVC}-${SHORT}" >> "$GITHUB_OUTPUT"
 
       - name: Skip push if tag exists (idempotent)
         id: check
         run: |
-          IFS=',' read -r TAG1 TAG2 <<< "${{ steps.tags.outputs.tags }}"
           REPO="${{ env.ECR_REPOSITORY }}"
-          set -e
-          for T in "$TAG1" "$TAG2"; do
-            found=$(aws ecr describe-images               --repository-name "$REPO"               --image-ids imageTag="$T"               --query 'imageDetails[0].imageDigest'               --output text 2>/dev/null || true)
+          for T in "${{ steps.tags.outputs.TAG1 }}" "${{ steps.tags.outputs.TAG2 }}"; do
+            found=$(aws ecr describe-images \
+              --repository-name "$REPO" \
+              --image-ids imageTag="$T" \
+              --query 'imageDetails[0].imageDigest' \
+              --output text 2>/dev/null || true)
             if [ -n "$found" ] && [ "$found" != "None" ]; then
               echo "exists=true" >> "$GITHUB_OUTPUT"
               echo "EXISTS_TAG=$T" >> "$GITHUB_OUTPUT"
@@ -130,7 +133,8 @@ jobs:
           provenance: false
           sbom: false
           tags: |
-            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.tags }}
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.TAG1 }}
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.TAG2 }}
 
       - name: Log when skipped (already exists)
         if: steps.check.outputs.exists == 'true'
