@@ -20,10 +20,4 @@ spec:
               service:
                 name: roles-api
                 port: { number: 9003 }
-          - path: /resource
-            pathType: Prefix
-            backend:
-              service:
-                name: resource-api
-                port: { number: 9002 }
 
