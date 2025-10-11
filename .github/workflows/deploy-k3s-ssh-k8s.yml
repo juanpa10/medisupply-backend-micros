@@ -82,7 +82,6 @@ jobs:
             SHA="${{ github.event.workflow_run.head_sha }}"
 
             # despliegue dinámico: cada carpeta de servicio (excepto db y yamls sueltos)
-            # despliegue dinámico: cada carpeta de servicio (excepto db y yamls sueltos)
             if [ -d "$BASE/k8s" ]; then
               for d in $(ls -1 "$BASE/k8s"); do
                 if [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
@@ -129,5 +128,5 @@ jobs:
                   sudo k3s kubectl -n medisupply rollout status deploy/${DEPLOY_NAME} --timeout=180s
                 fi
               done
-fi
+            fi
 
