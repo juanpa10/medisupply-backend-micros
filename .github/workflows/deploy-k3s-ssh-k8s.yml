@@ -1,0 +1,97 @@
+name: Deploy to Kubernetes (k3s via SSH)
+
+on:
+  workflow_run:
+    workflows: ["Build & Push to ECR (k8s)"]
+    types: [completed]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect files (k8s manifests + scripts)
+        run: |
+          mkdir -p out
+          if [ -d k8s ]; then cp -r k8s out/k8s; fi
+          if [ -d scripts ]; then cp -r scripts out/scripts; fi
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "out/*"
+          target: "/tmp/medisupply"
+
+      - name: Install k3s & deploy
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ECR_REPO: ${{ vars.ECR_REPOSITORY }}
+          TAG_PREFIX: k8s-
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            if [ -f /tmp/medisupply/scripts/k3s-install.sh ]; then
+              sudo bash /tmp/medisupply/scripts/k3s-install.sh
+            fi
+
+            # Base (idempotente) si existen manifests
+            if [ -d /tmp/medisupply/k8s ]; then
+              sudo k3s kubectl apply -f /tmp/medisupply/k8s/namespace.yaml || true
+              sudo k3s kubectl apply -f /tmp/medisupply/k8s/configmap.env.yaml || true
+              if [ -d /tmp/medisupply/k8s/db ]; then
+                sudo k3s kubectl apply -f /tmp/medisupply/k8s/db/secret.yaml || true
+                sudo k3s kubectl apply -f /tmp/medisupply/k8s/db/statefulset.yaml || true
+                sudo k3s kubectl apply -f /tmp/medisupply/k8s/db/service.yaml || true
+              fi
+              sudo k3s kubectl apply -f /tmp/medisupply/k8s/ingress.yaml || true
+            fi
+
+            # ECR imagePullSecret
+            PASS=$(aws ecr get-login-password --region "$AWS_REGION")
+            sudo k3s kubectl -n medisupply delete secret ecr-cred --ignore-not-found
+            sudo k3s kubectl -n medisupply create secret docker-registry ecr-cred               --docker-server="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"               --docker-username="AWS"               --docker-password="$PASS"
+
+            SHA="${{ github.event.workflow_run.head_sha }}"
+
+            # Despliegue dinámico: cada carpeta en k8s/ (excepto db y archivos sueltos)
+            for d in $(ls -1 /tmp/medisupply/k8s 2>/dev/null || true); do
+              if [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
+                continue
+              fi
+              if [ -d "/tmp/medisupply/k8s/$d" ] && [ -f "/tmp/medisupply/k8s/$d/service.yaml" ] && [ -f "/tmp/medisupply/k8s/$d/deployment.yaml" ]; then
+                echo ">> Deploy service: $d"
+
+                # Esperar a que exista el tag con prefijo k8s-
+                for i in $(seq 1 30); do
+                  ok=$(aws ecr describe-images                        --repository-name "$ECR_REPO"                        --image-ids imageTag="${TAG_PREFIX}${d}-${SHA}"                        --query 'imageDetails[0].imageDigest'                        --output text 2>/dev/null || true)
+                  if [ -n "$ok" ] && [ "$ok" != "None" ]; then
+                    echo "   ✔ image ${TAG_PREFIX}${d}-${SHA} found"
+                    break
+                  fi
+                  echo "   …waiting image ${TAG_PREFIX}${d}-${SHA} ($i/30)"; sleep 4
+                done
+
+                sudo k3s kubectl apply -f "/tmp/medisupply/k8s/$d/service.yaml"
+                sudo k3s kubectl apply -f "/tmp/medisupply/k8s/$d/deployment.yaml"
+
+                CNAME=$(sudo k3s kubectl -n medisupply get deploy/$d -o jsonpath='{.spec.template.spec.containers[0].name}')
+                IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${d}-${SHA}"
+                sudo k3s kubectl -n medisupply set image deploy/$d $CNAME=$IMG
+                sudo k3s kubectl -n medisupply rollout status deploy/$d --timeout=180s
+              fi
+            done
