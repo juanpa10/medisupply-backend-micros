@@ -9,8 +9,8 @@ services:
       JWT_SECRET: "supersecret"
       ACCESS_TOKEN_EXPIRE_MINUTES: "60"
       USERS_JSON: >-
-        [{"user":"admin","password":"Admin#123","role":"security_admin"},
-         {"user":"viewer","password":"Viewer#123","role":"viewer"}]
+        [{"email":"admin@medisupply.com","password":"Admin#123","role":"security_admin"},
+         {"email":"viewer@medisupply.com","password":"Viewer#123","role":"viewer"}]
 
   resource-api:
     build:

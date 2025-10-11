@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 PORT = int(os.environ.get("PORT", "9001"))
 JWT_SECRET = os.environ.get("JWT_SECRET", "supersecret")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-USERS_JSON = os.environ.get("USERS_JSON", '[{"user":"admin","password":"Admin#123","role":"security_admin"},{"usere":"viewer","password":"Viewer#123","role":"viewer"}]')
+USERS_JSON = os.environ.get("USERS_JSON", '[{"email":"admin@medisupply.com","password":"Admin#123","role":"security_admin"},{"email":"viewer@medisupply.com","password":"Viewer#123","role":"viewer"}]')
 
 pwd_ctx = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
@@ -16,7 +16,7 @@ def load_users():
     data = json.loads(USERS_JSON)
     users = {}
     for u in data:
-        users[u["user"]] = {"pwd_hash": pwd_ctx.hash(u["password"]), "role": u["role"]}
+        users[u["email"]] = {"pwd_hash": pwd_ctx.hash(u["password"]), "role": u["role"]}
     return users
 
 USERS = load_users()
@@ -39,14 +39,14 @@ def health():
 @app.post("/auth/login")
 def login():
     body = request.get_json(force=True, silent=True) or {}
-    username = body.get("user")
+    email = body.get("email")
     password = body.get("password")
-    if not username or not password:
-        return jsonify({"error": "user and password are required"}), 400
-    user = USERS.get(username)
+    if not email or not password:
+        return jsonify({"error": "email and password are required"}), 400
+    user = USERS.get(email)
     if not user or not pwd_ctx.verify(password, user["pwd_hash"]):
         return jsonify({"error": "invalid credentials"}), 401
-    token = create_token(username, user["role"])
+    token = create_token(email, user["role"])
     return jsonify({"access_token": token, "token_type": "Bearer", "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60, "role": user["role"]})
 
 @app.get("/auth/verify")

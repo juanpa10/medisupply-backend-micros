@@ -7,16 +7,16 @@ import os, json, time, jwt
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "supersecret")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
-USERS_JSON = os.environ.get("USERS_JSON", '[{"user":"admin","password":"Admin#123","role":"security_admin"},{"user":"viewer","password":"Viewer#123","role":"viewer"}]')
+USERS_JSON = os.environ.get("USERS_JSON", '[{"email":"admin@medisupply.com","password":"Admin#123","role":"security_admin"},{"email":"viewer@medisupply.com","password":"Viewer#123","role":"viewer"}]')
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class User(BaseModel):
-    user: str
+    email: str
     password: str
     role: str
 
 class LoginRequest(BaseModel):
-    user: str
+    email: str
     password: str
 
 class TokenResponse(BaseModel):
@@ -32,8 +32,8 @@ def make_users() -> List[User]:
     return users
 
 USERS = make_users()
-HASHED = {u.user: pwd_ctx.hash(u.password) for u in USERS}
-ROLES = {u.user: u.role for u in USERS}
+HASHED = {u.email: pwd_ctx.hash(u.password) for u in USERS}
+ROLES = {u.email: u.role for u in USERS}
 
 app = FastAPI(title="Auth Service (FastAPI)")
 
@@ -45,12 +45,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def verify_user(username: str, password: str) -> str:
-    if username not in HASHED:
+def verify_user(email: str, password: str) -> str:
+    if email not in HASHED:
         return None
-    if not pwd_ctx.verify(password, HASHED[username]):
+    if not pwd_ctx.verify(password, HASHED[email]):
         return None
-    return ROLES[username]
+    return ROLES[email]
 
 def create_access_token(sub: str, role: str, expires_minutes: int = ACCESS_TOKEN_EXPIRE_MINUTES) -> str:
     now = int(time.time())
@@ -59,10 +59,10 @@ def create_access_token(sub: str, role: str, expires_minutes: int = ACCESS_TOKEN
 
 @app.post("/auth/login", response_model=TokenResponse)
 def login(req: LoginRequest):
-    role = verify_user(req.username, req.password)
+    role = verify_user(req.email, req.password)
     if not role:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token(req.username, role)
+    token = create_access_token(req.email, role)
     return TokenResponse(access_token=token, expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
 
 class VerifyResponse(BaseModel):
@@ -74,6 +74,6 @@ class VerifyResponse(BaseModel):
 def verify(token: str):
     try:
         decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        return VerifyResponse(sub=decoded.get("sub") or decoded.get("user"), role=decoded.get("role","unknown"), valid=True)
+        return VerifyResponse(sub=decoded.get("sub") or decoded.get("email"), role=decoded.get("role","unknown"), valid=True)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

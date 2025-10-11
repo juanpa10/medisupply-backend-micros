@@ -29,7 +29,7 @@ docker compose up --build -d
 ## Pruebas CURL
 ```bash
 #Token
-TOKEN=$(curl -s -X POST http://localhost:9001/auth/login -H "Content-Type: application/json" -d '{"user":"admin","password":"Admin#123"}' | jq -r .access_token)
+TOKEN=$(curl -s -X POST http://localhost:9001/auth/login -H "Content-Type: application/json" -d '{"email":"admin@medisupply.com","password":"Admin#123"}' | jq -r .access_token)
 
 #Consulta usuarios con sus roles
 curl -s "http://localhost:9003/api/users-with-roles" \

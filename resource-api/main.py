@@ -39,8 +39,8 @@ def health():
 
 @app.get("/whoami")
 def whoami(user=Depends(get_user_from_token)):
-    return {"user": user.get("sub") or user.get("user"), "role": user.get("role","unknown")}
+    return {"email": user.get("sub") or user.get("email") or user.get("user"), "role": user.get("role","unknown")}
 
 @app.post("/admin/sensitive-op")
 def sensitive_op_admin(user=Depends(require_role("security_admin"))):
-    return {"ok": True, "operation": "sensitive-op", "by": user.get("sub")}
+    return {"ok": True, "operation": "sensitive-op", "by": user.get("sub") or user.get("email")}
