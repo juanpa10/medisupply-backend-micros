@@ -28,14 +28,14 @@ spec:
     - web
   routes:
     - kind: Rule
-      match: Host(`api.medisupply.local`) && PathPrefix(`/auth`)
+      match: PathPrefix(`/auth`)
       middlewares:
         - name: strip-auth
       services:
         - name: auth-service   # EXISTE
           port: 9001
     - kind: Rule
-      match: Host(`api.medisupply.local`) && PathPrefix(`/roles`)
+      match: PathPrefix(`/roles`)
       middlewares:
         - name: strip-roles
       services:
