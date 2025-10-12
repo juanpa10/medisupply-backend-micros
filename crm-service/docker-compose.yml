@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  crm-service:
+    build: .
+    container_name: crm-service
+    ports:
+      - "5002:5000"
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=postgresql://crmuser:crmpass@crm-db:5432/crm_db
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - AUTH_SERVICE_URL=http://auth-service:5000
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      - crm-db
+    networks:
+      - medisupply-network
+
+  crm-db:
+    image: postgres:15-alpine
+    container_name: crm-db
+    environment:
+      - POSTGRES_USER=crmuser
+      - POSTGRES_PASSWORD=crmpass
+      - POSTGRES_DB=crm_db
+    volumes:
+      - crm-db-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - medisupply-network
+
+volumes:
+  crm-db-data:
+
+networks:
+  medisupply-network:
+    external: true
