@@ -1,4 +1,4 @@
-# --- Middlewares: quitan prefijos /auth y /roles ---
+# --- Middlewares: quitan los prefijos /auth y /roles ---
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
@@ -6,7 +6,8 @@ metadata:
   namespace: medisupply
 spec:
   stripPrefix:
-    prefixes: ["/auth"]
+    prefixes:
+      - /auth
 ---
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
@@ -15,16 +16,18 @@ metadata:
   namespace: medisupply
 spec:
   stripPrefix:
-    prefixes: ["/roles"]
+    prefixes:
+      - /roles
 ---
-# --- IngressRoute Traefik (entryPoint web = puerto 80) ---
+# --- IngressRoute de Traefik (puerto 80 = entryPoint "web") ---
 apiVersion: traefik.containo.us/v1alpha1
 kind: IngressRoute
 metadata:
   name: medisupply-ingressroute
   namespace: medisupply
 spec:
-  entryPoints: ["web"]
+  entryPoints:
+    - web
   routes:
     - match: PathPrefix(`/auth`)
       kind: Rule
@@ -40,5 +43,3 @@ spec:
       services:
         - name: roles-api
           port: 9003
-
-
