@@ -4,7 +4,7 @@ on:
   workflow_run:
     workflows: ["Build & Push to ECR (Kubernetes)"]   # debe coincidir EXACTO con el nombre del workflow de build
     types: [completed]
-  repository_dispatch: # dispatch que se usa desde el repo del frontend
+  repository_dispatch: # dispatch que se usa desde el repo del frontend 
     types: [deploy-from-front] 
   workflow_dispatch: {}
 
