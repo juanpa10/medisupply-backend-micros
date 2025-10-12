@@ -3,21 +3,53 @@ kind: Ingress
 metadata:
   name: medisupply-ingress
   namespace: medisupply
+  annotations:
+    # Fuerza Traefik (k3s trae Traefik por defecto)
+    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.middlewares: |
+      medisupply-strip-auth@kubernetescrd,medisupply-strip-roles@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
     - http:
         paths:
+          # Todo lo que empiece por /auth se envía a auth-service:9001
           - path: /auth
             pathType: Prefix
             backend:
               service:
                 name: auth-service
-                port: { number: 9001 }
+                port:
+                  number: 9001
+          # Todo lo que empiece por /roles se envía a roles-api:9003
           - path: /roles
             pathType: Prefix
             backend:
               service:
                 name: roles-api
-                port: { number: 9003 }
+                port:
+                  number: 9003
+---
+# Quita el prefijo /auth (queda /...)
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-auth
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes:
+      - /auth
+---
+# Quita el prefijo /roles (queda /...)
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-roles
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes:
+      - /roles
+
 
