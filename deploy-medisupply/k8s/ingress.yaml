@@ -31,7 +31,7 @@ spec:
         - name: roles-api      # EXISTE
           port: 9003
     - kind: Rule
-      match: PathPrefix(`/`)      
+      match: PathPrefix(`/login`)      
       services:
         - name: web-portal
           port: 80
