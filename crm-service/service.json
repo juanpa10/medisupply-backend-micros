@@ -1,0 +1,9 @@
+{
+  "name": "crm-service",
+  "containerPort": 9004,
+  "pathPrefix": "/crm/*",
+  "healthPath": "/health",
+  "cpu": 256,
+  "memory": 512,
+  "desiredCount": 1
+}

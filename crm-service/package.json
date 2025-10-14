@@ -1,0 +1,19 @@
+{
+    "name": "crm-service",
+    "version": "1.0.0",
+    "description": "Servicio de CRM para MediSupply - Gestión de proveedores, vendedores, clientes y productos",
+    "main": "run.py",
+    "scripts": {
+        "start": "python run.py",
+        "test": "pytest",
+        "migrate": "flask db upgrade"
+    },
+    "keywords": [
+        "crm",
+        "suppliers",
+        "flask",
+        "microservice"
+    ],
+    "author": "MediSupply Team",
+    "license": "PROPRIETARY"
+}
