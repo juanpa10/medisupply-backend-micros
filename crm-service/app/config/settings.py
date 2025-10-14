@@ -20,12 +20,13 @@ class Config:
     SQLALCHEMY_ECHO = False
     
     # JWT
-    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
+    # Accept JWT_SECRET for consistency with other services
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET', os.getenv('JWT_SECRET_KEY', 'jwt-secret-key'))
     JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     
-    # Auth Service
-    AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'http://localhost:5001')
+    # Auth Service (point to auth-service container used in docker-compose)
+    AUTH_SERVICE_URL = os.getenv('AUTH_SERVICE_URL', 'http://auth-service:9001')
     
     # File Upload
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', './uploads')

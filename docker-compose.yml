@@ -58,6 +58,42 @@ services:
       timeout: 5s
       retries: 5
 
+  crm-service:
+    build:
+      context: ./crm-service
+    image: pyms-crm-service:local
+    ports:
+      - "9004:9004"
+    environment:
+      JWT_SECRET: "supersecret"
+      # any crm-specific env vars can be added here
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      FLASK_APP: run.py
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      auth-service:
+        condition: service_started
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:9004/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+
   medisupply-db:
     image: postgres:16-alpine
     container_name: medisupply-db

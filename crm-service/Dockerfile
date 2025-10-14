@@ -27,8 +27,12 @@ RUN mkdir -p uploads logs
 ENV FLASK_APP=run.py
 ENV PYTHONUNBUFFERED=1
 
-# Expose port
-EXPOSE 5000
+# Expose port (match service.json/containerPort)
+EXPOSE 9004
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "run:app"]
+# Copy entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Use entrypoint to wait for DB and optionally init DB
+ENTRYPOINT ["/entrypoint.sh"]

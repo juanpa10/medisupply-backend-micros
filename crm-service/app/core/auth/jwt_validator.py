@@ -49,17 +49,23 @@ def verify_token_with_auth_service(token):
         UnauthorizedError: Si el token es inválido
     """
     try:
-        auth_url = current_app.config['AUTH_SERVICE_URL']
+        auth_url = current_app.config['AUTH_SERVICE_URL'].rstrip('/')
+        # auth-service exposes /auth/verify (not /api/v1/auth/verify)
+        verify_url = f"{auth_url}/auth/verify"
         response = requests.get(
-            f'{auth_url}/api/v1/auth/verify',
+            verify_url,
             headers={'Authorization': f'Bearer {token}'},
             timeout=5
         )
-        
+
         if response.status_code == 200:
             return response.json()
         else:
-            raise UnauthorizedError('Token inválido')
+            # If auth service returns non-200, try a local validation as fallback
+            try:
+                return validate_jwt_token(token)
+            except Exception:
+                raise UnauthorizedError('Token inválido')
     except requests.RequestException:
         # Si el servicio de auth no está disponible, validar localmente
         return validate_jwt_token(token)
