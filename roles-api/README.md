@@ -40,7 +40,7 @@ curl -s "http://localhost:9003/api/users" \
   -H "Authorization: Bearer $TOKEN"
 
 #Crea usuario
-curl -s -X POST "http://localhost:9003/api/users" \
+curl -s -X POST "http://localhost:9001/api/users" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"names":"Nuevo Usuario","email":"nuevo@acme.com","password":"Secreta#123"}'

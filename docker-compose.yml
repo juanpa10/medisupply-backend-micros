@@ -11,6 +11,11 @@ services:
       USERS_JSON: >-
         [{"email":"admin@medisupply.com","password":"Admin#123","role":"security_admin"},
          {"email":"viewer@medisupply.com","password":"Viewer#123","role":"viewer"}]
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      INIT_DB: 'true'
+    depends_on:
+      medisupply-db:
+        condition: service_healthy
 
   resource-api:
     build:
@@ -83,6 +88,42 @@ services:
           import urllib.request, sys
           try:
               with urllib.request.urlopen('http://localhost:9004/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  managers-service:
+    build:
+      context: ./managers-service
+    image: pyms-managers-service:local
+    ports:
+      - "9005:5001"
+    environment:
+      JWT_SECRET: "supersecret"
+      JWT_ALGORITHM: "HS256"
+      AUTH_SERVICE_URL: "http://auth-service:9001"
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      FLASK_APP: app:create_app
+      PYTHONUNBUFFERED: "1"
+    command: /bin/sh -c "python init_db.py --init --seed && flask run --host=0.0.0.0 --port=5001"
+    depends_on:
+      auth-service:
+        condition: service_started
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:5001/health', timeout=3) as r:
                   print('ok')
           except Exception as e:
               print(e)
