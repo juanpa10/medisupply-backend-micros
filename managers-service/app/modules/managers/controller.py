@@ -61,25 +61,55 @@ def assign_client_controller(manager_ref):
     if client_id is None:
         return jsonify({'error': 'client_id required'}), 400
 
-    # resolve manager_ref to numeric id
+    # resolve manager_ref to numeric id; support numeric identification values
     repo = ManagerRepository()
     manager_id = None
+    mgr = None
+    # If the ref looks numeric, try to resolve as primary key first.
     try:
-        # try numeric
-        manager_id = int(manager_ref)
+        maybe_id = int(manager_ref)
+        mgr = repo.get_by_id(maybe_id)
+        if mgr:
+            manager_id = mgr.id
+        else:
+            # fallback: maybe the identification is numeric (e.g. '234561')
+            mgr = db.session.query(repo.model).filter(repo.model.identification == str(manager_ref), repo.model.is_deleted == False).first()
+            if not mgr:
+                return jsonify({'error': 'manager not found'}), 404
+            manager_id = mgr.id
     except ValueError:
-        # lookup by identification field
+        # not numeric -> lookup by identification field
         mgr = db.session.query(repo.model).filter(repo.model.identification == manager_ref, repo.model.is_deleted == False).first()
         if not mgr:
             return jsonify({'error': 'manager not found'}), 404
         manager_id = mgr.id
+
+    # resolve client_id: accept either numeric PK or identifier string
+    from app.modules.managers.models import Client
+    client_obj = None
+    try:
+        # try numeric id first
+        maybe_cid = int(client_id)
+        client_obj = db.session.query(Client).filter(Client.id == maybe_cid).first()
+        if not client_obj:
+            # fallback: maybe the identifier is numeric string
+            client_obj = db.session.query(Client).filter(Client.identifier == str(client_id), Client.is_deleted == False).first()
+    except (ValueError, TypeError):
+        # not numeric -> lookup by identifier
+        client_obj = db.session.query(Client).filter(Client.identifier == str(client_id), Client.is_deleted == False).first()
+
+    if not client_obj:
+        return jsonify({'error': 'client not found'}), 404
+
+    # resolved numeric client PK to use in service call
+    resolved_client_id = int(client_obj.id)
 
     # prefer authenticated operator if present
     if getattr(g, 'current_user', None):
         operator = g.current_user.get('username') or operator
 
     try:
-        client = service.assign_client(int(manager_id), int(client_id), operator=operator, evidence=evidence)
+        client = service.assign_client(int(manager_id), int(resolved_client_id), operator=operator, evidence=evidence)
         return jsonify(client.to_dict()), 200
     except NotFoundError as e:
         return jsonify({'error': str(e)}), 404
@@ -123,3 +153,17 @@ def get_client_manager_controller(client_id):
     if not client.manager:
         return jsonify({'manager': None}), 200
     return jsonify({'manager': client.manager.to_dict()}), 200
+
+
+def get_manager_by_email_controller(email):
+    """Return a manager by email along with an array of linked clients."""
+    repo = ManagerRepository()
+    mgr = repo.get_by_email(email)
+    if not mgr:
+        return jsonify({'error': 'manager not found'}), 404
+    # serialize manager and include clients
+    mgr_data = mgr.to_dict()
+    # eager load clients
+    clients = [c.to_dict() for c in mgr.clients] if getattr(mgr, 'clients', None) else []
+    mgr_data['clients'] = clients
+    return jsonify(mgr_data), 200

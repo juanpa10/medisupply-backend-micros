@@ -7,7 +7,8 @@ class AppException(Exception):
     """Base exception that carries HTTP status and optional payload"""
 
     def __init__(self, message, status_code=500, payload=None):
-        super().__init__()
+        # Ensure base Exception stores the message so str(error) returns it
+        super().__init__(message)
         self.message = message
         self.status_code = status_code
         self.payload = payload

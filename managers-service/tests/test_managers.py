@@ -57,3 +57,31 @@ def test_assign_and_reassign_client(client):
     assert reassign.status_code == 200
     check2 = client.get(f'/api/v1/clients/{client_id}/manager')
     assert check2.get_json()['manager']['id'] == id2
+
+
+def test_get_manager_by_email_includes_clients(client):
+    # create manager
+    payload = {
+        'full_name': 'Manager X',
+        'email': 'mx@example.com',
+        'phone': '555',
+        'identification': 'MX1'
+    }
+    resp = client.post('/api/v1/managers', json=payload)
+    assert resp.status_code == 201
+    mid = resp.get_json()['id']
+    # create two clients
+    c1 = client.post('/api/v1/clients', json={'name':'C1','identifier':'C1'})
+    c2 = client.post('/api/v1/clients', json={'name':'C2','identifier':'C2'})
+    assert c1.status_code == 201 and c2.status_code == 201
+    id1 = c1.get_json()['id']; id2 = c2.get_json()['id']
+    # assign both to manager
+    a1 = client.post(f'/api/v1/managers/{mid}/assign', json={'client_id': id1})
+    a2 = client.post(f'/api/v1/managers/{mid}/assign', json={'client_id': id2})
+    assert a1.status_code == 200 and a2.status_code == 200
+    # fetch by email
+    r = client.get(f'/api/v1/managers/by-email/{payload["email"]}')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j.get('email') == payload['email']
+    assert isinstance(j.get('clients'), list) and len(j.get('clients')) >= 2
