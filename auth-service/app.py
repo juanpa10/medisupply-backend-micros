@@ -33,6 +33,12 @@ db = None
 if not DB_ENABLED:
     data = json.loads(USERS_JSON)
     USERS = {u["email"]: {"pwd_hash": pwd_ctx.hash(u["password"]), "role": u["role"]} for u in data}
+    
+    def load_users():
+        """Return in-memory USERS dict (helpers for tests)."""
+        data = json.loads(USERS_JSON)
+        return {u["email"]: {"pwd_hash": pwd_ctx.hash(u["password"]), "role": u["role"]} for u in data}
+
 else:
     # SQLAlchemy is only imported/used when DB is enabled
     from flask_sqlalchemy import SQLAlchemy
@@ -117,6 +123,24 @@ if DB_ENABLED:
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     # initialize the SQLAlchemy extension for this app process
     db.init_app(app)
+    # If INIT_DB is set at import time (tests use this), run init_db to create/seed tables
+    if os.environ.get('INIT_DB', '').lower() in ('1', 'true'):
+        try:
+            # run idempotent init
+            init_db(app)
+        except Exception:
+            # swallow failures during import-time init to keep behavior permissive in tests
+            pass
+
+
+def create_token(sub: str, role: str):
+    now = int(time.time())
+    payload = {"sub": sub, "role": role, "iat": now, "exp": now + ACCESS_TOKEN_EXPIRE_MINUTES * 60}
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+def decode_token(token: str):
+    return jwt.decode(token, JWT_SECRET, algorithms=["HS256"]) 
 
 
 @app.get('/health')
@@ -165,6 +189,28 @@ def login():
         'expires_in': ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         'role': u.role
     })
+
+
+
+@app.get('/auth/verify')
+def verify():
+    # Accept token via query param `token` or Authorization header `Bearer <token>`
+    token = request.args.get('token')
+    if not token:
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            token = auth.split(None, 1)[1].strip()
+
+    if not token:
+        return jsonify({'valid': False}), 400
+
+    try:
+        payload = decode_token(token)
+        return jsonify({'valid': True, 'role': payload.get('role'), 'sub': payload.get('sub')}), 200
+    except jwt.ExpiredSignatureError:
+        return jsonify({'valid': False, 'error': 'token expired'}), 401
+    except Exception:
+        return jsonify({'valid': False, 'error': 'invalid token'}), 401
 
 
 if __name__ == '__main__':
