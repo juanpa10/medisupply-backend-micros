@@ -5,5 +5,5 @@ metadata:
   namespace: medisupply
 spec:
   selector: { app: managers-service }
-  ports: [ { port: 9005, targetPort: 5001 } ]
+  ports: [ { port: 9005, targetPort: 9005 } ]
   type: ClusterIP

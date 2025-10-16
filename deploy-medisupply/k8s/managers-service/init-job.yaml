@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: managers-init-db
+  namespace: medisupply
+  labels: { app: managers-service, job: init-db }
+spec:
+  backoffLimit: 2
+  template:
+    metadata: { labels: { app: managers-service, job: init-db } }
+    spec:
+      restartPolicy: Never
+      imagePullSecrets: [ { name: ecr-cred } ]
+      containers:
+        - name: init
+          image: REPLACED_BY_PIPELINE
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args: ["python init_db.py --init --seed"]
+          env:
+            - name: DB_HOST
+              value: "postgres.medisupply.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_DB } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
+          envFrom:
+            - configMapRef: { name: medisupply-config }
