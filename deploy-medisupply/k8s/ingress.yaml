@@ -53,3 +53,8 @@ spec:
       services:
         - name: crm-service      # EXISTE
           port: 9004
+    - kind: Rule
+      match: PathPrefix(`/managers`)
+      services:
+        - name: managers-service      # EXISTE
+          port: 9005
