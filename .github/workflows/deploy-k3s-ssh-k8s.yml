@@ -125,7 +125,7 @@ jobs:
             # despliegue dinámico: cada carpeta de servicio (excepto web, db y yamls sueltos)
             if [ -d "$BASE/k8s" ]; then
               for d in $(ls -1 "$BASE/k8s"); do
-                if [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
+                if [ "$d" = "web" ] || [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
                   continue
                 fi
                 if [ -d "$BASE/k8s/$d" ] && [ -f "$BASE/k8s/$d/service.yaml" ] && [ -f "$BASE/k8s/$d/deployment.yaml" ]; then
