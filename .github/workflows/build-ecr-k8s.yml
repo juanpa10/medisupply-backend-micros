@@ -92,7 +92,7 @@ jobs:
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Compute tags (NO latest/branch)
+      - name: Compute tags (include latest)
         id: tags
         run: |
           SHA="${{ github.sha }}"
@@ -101,23 +101,22 @@ jobs:
           SHORT=${SHA::12}
           echo "TAG1=${PREFIX}${SVC}-${SHA}"   >> "$GITHUB_OUTPUT"
           echo "TAG2=${PREFIX}${SVC}-${SHORT}" >> "$GITHUB_OUTPUT"
+          echo "TAG3=${PREFIX}${SVC}-latest"   >> "$GITHUB_OUTPUT"
 
-      - name: Skip push if tag exists (idempotent)
+      - name: Skip push if full-SHA tag exists (idempotent)
         id: check
         run: |
           REPO="${{ env.ECR_REPOSITORY }}"
-          for T in "${{ steps.tags.outputs.TAG1 }}" "${{ steps.tags.outputs.TAG2 }}"; do
-            found=$(aws ecr describe-images \
-              --repository-name "$REPO" \
-              --image-ids imageTag="$T" \
-              --query 'imageDetails[0].imageDigest' \
-              --output text 2>/dev/null || true)
-            if [ -n "$found" ] && [ "$found" != "None" ]; then
-              echo "exists=true" >> "$GITHUB_OUTPUT"
-              echo "EXISTS_TAG=$T" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          done
+          T="$${{ steps.tags.outputs.TAG1 }}"
+          found=$(aws ecr describe-images \
+            --repository-name "$REPO" \
+            --image-ids imageTag="$T" \
+            --query 'imageDetails[0].imageDigest' \
+            --output text 2>/dev/null || true)
+          if [ -n "$found" ] && [ "$found" != "None" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "EXISTS_TAG=$T" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up Buildx
         if: steps.check.outputs.exists != 'true'
@@ -135,6 +134,7 @@ jobs:
           tags: |
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.TAG1 }}
             ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.TAG2 }}
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ steps.tags.outputs.TAG3 }}
 
       - name: Log when skipped (already exists)
         if: steps.check.outputs.exists == 'true'
