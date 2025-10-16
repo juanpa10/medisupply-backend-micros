@@ -169,6 +169,9 @@ jobs:
                     TMP_JOB="/tmp/${d}-init-job.yaml"
                     cp "$BASE/k8s/$d/init-job.yaml" "$TMP_JOB"
                     sed -i "s|REPLACED_BY_PIPELINE|$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}|g" "$TMP_JOB"
+                    # Remove any previous job with same name to avoid immutable field errors
+                    sudo k3s kubectl -n medisupply delete job ${d}-init-db --ignore-not-found || true
+                    sudo k3s kubectl -n medisupply delete pods -l job-name=${d}-init-db --ignore-not-found || true
                     sudo k3s kubectl -n medisupply apply -f "$TMP_JOB"
                     # wait for job to succeed (timeout ~300s)
                     for i in $(seq 1 60); do
