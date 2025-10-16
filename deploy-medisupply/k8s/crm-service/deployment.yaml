@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm-service
+  namespace: medisupply
+  labels: { app: crm-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: crm-service } }
+  template:
+    metadata: { labels: { app: crm-service } }
+    spec:
+      imagePullSecrets: [ { name: ecr-cred } ]
+      containers:
+        - name: crm
+          image: REPLACED_BY_PIPELINE
+          imagePullPolicy: Always
+          ports: [ { containerPort: 9004 } ]
+          env:
+            - name: DB_HOST
+              value: "postgres.medisupply.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_DB } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+          envFrom:
+            - configMapRef: { name: medisupply-config }
+          readinessProbe:
+            httpGet: { path: /health, port: 9004 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 9004 }
+            initialDelaySeconds: 15
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
