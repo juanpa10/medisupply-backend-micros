@@ -150,30 +150,34 @@ jobs:
                   LATEST_TAG="${TAG_PREFIX}${IMG_NAME}-latest"
                   SELECTED_TAG="$FULL_TAG"
 
+                  # helper: check for image digest (returns empty string if not found)
+                  check_digest() {
+                    aws ecr describe-images \
+                      --repository-name "$ECR_REPO" \
+                      --image-ids imageTag="$1" \
+                      --query 'imageDetails[0].imageDigest' \
+                      --output text 2>/dev/null || true
+                  }
+
+                  echo "   Looking for full tag: $FULL_TAG"
+                  FULL_DIGEST=""
                   for i in $(seq 1 30); do
-                    ok=$(aws ecr describe-images \
-                        --repository-name "$ECR_REPO" \
-                        --image-ids imageTag="$FULL_TAG" \
-                        --query 'imageDetails[0].imageDigest' \
-                        --output text 2>/dev/null || true)
-                    if [ -n "$ok" ] && [ "$ok" != "None" ]; then
-                      echo "   ✔ image $FULL_TAG found"
+                    FULL_DIGEST=$(check_digest "$FULL_TAG")
+                    if [ -n "$FULL_DIGEST" ] && [ "$FULL_DIGEST" != "None" ]; then
+                      echo "   ✔ image $FULL_TAG found (digest: $FULL_DIGEST)"
                       SELECTED_TAG="$FULL_TAG"
                       break
                     fi
                     echo "   …waiting image $FULL_TAG ($i/30)"; sleep 4
                   done
 
-                  if [ -z "$ok" ] || [ "$ok" = "None" ]; then
-                    echo "   ⚠️ Full-SHA tag not found for $IMG_NAME, trying latest tag: $LATEST_TAG"
+                  if [ -z "$FULL_DIGEST" ] || [ "$FULL_DIGEST" = "None" ]; then
+                    echo "   ⚠️ Full-SHA tag not found for $IMG_NAME after retries, trying latest tag: $LATEST_TAG"
+                    LATEST_DIGEST=""
                     for i in $(seq 1 10); do
-                      ok=$(aws ecr describe-images \
-                          --repository-name "$ECR_REPO" \
-                          --image-ids imageTag="$LATEST_TAG" \
-                          --query 'imageDetails[0].imageDigest' \
-                          --output text 2>/dev/null || true)
-                      if [ -n "$ok" ] && [ "$ok" != "None" ]; then
-                        echo "   ✔ image $LATEST_TAG found"
+                      LATEST_DIGEST=$(check_digest "$LATEST_TAG")
+                      if [ -n "$LATEST_DIGEST" ] && [ "$LATEST_DIGEST" != "None" ]; then
+                        echo "   ✔ image $LATEST_TAG found (digest: $LATEST_DIGEST)"
                         SELECTED_TAG="$LATEST_TAG"
                         break
                       fi
@@ -181,8 +185,10 @@ jobs:
                     done
                   fi
 
-                  if [ -z "$ok" ] || [ "$ok" = "None" ]; then
+                  if [ "$SELECTED_TAG" = "$FULL_TAG" ] && { [ -z "$FULL_DIGEST" ] || [ "$FULL_DIGEST" = "None" ]; }; then
                     echo "   ⚠️ No image found for $IMG_NAME (tried $FULL_TAG and $LATEST_TAG). Will continue and kubectl may fail." 
+                  else
+                    echo "   ▶ Selected image tag for $IMG_NAME: $SELECTED_TAG"
                   fi
 
                   # aplica manifests y cambia imagen del deployment real
