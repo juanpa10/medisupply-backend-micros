@@ -6,6 +6,7 @@ from app.modules.managers.repository import ManagerRepository
 from app.config.database import db
 from app.core.exceptions import ValidationError, ConflictError, NotFoundError
 from app.core.auth.decorators import require_auth, require_permission
+from app.modules.managers.models import Client
 
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -142,6 +143,14 @@ def create_client_controller():
         # fallback: if an integrity error still occurs, return 400 with a helpful message
         db.session.rollback()
         return jsonify({'error': 'unable to create client, identifier may already exist'}), 400
+
+
+@require_auth
+def list_clients_controller():
+    """Return all non-deleted clients."""
+    from app.config.database import db
+    records = db.session.query(Client).filter(Client.is_deleted == False).all()
+    return jsonify([c.to_dict() for c in records]), 200
 
 
 def get_client_manager_controller(client_id):
