@@ -108,11 +108,8 @@ jobs:
 
               # Calcula la imagen del front: usa el SHA enviado; si no vino, usa latest
               WEB_SHA="${{ github.event.client_payload.web_sha }}"
-              if [ -n "$WEB_SHA" ]; then
-                WEB_TAG="k8s-web-${WEB_SHA}"
-              else
-                WEB_TAG="k8s-web-latest"
-              fi
+              
+              WEB_TAG="k8s-web-latest"
               WEB_IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${WEB_TAG}"
 
               # Actualiza el deployment del front
