@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: managers-service
+  namespace: medisupply
+  labels: { app: managers-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: managers-service } }
+  template:
+    metadata: { labels: { app: managers-service } }
+    spec:
+      imagePullSecrets: [ { name: ecr-cred } ]
+      containers:
+        - name: managers
+          image: REPLACED_BY_PIPELINE
+          imagePullPolicy: Always
+          ports: [ { containerPort: 9005 } ]
+          env:
+            - name: DB_HOST
+              value: "postgres.medisupply.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_DB } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            - name: JWT_ALGORITHM
+              value: "HS256"
+            - name: FLASK_APP
+              value: app:create_app
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          envFrom:
+            - configMapRef: { name: medisupply-config }
+          readinessProbe:
+            httpGet: { path: /health, port: 9005 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 9005 }
+            initialDelaySeconds: 15
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
