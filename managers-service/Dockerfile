@@ -13,4 +13,4 @@ ENV PORT=9005
 EXPOSE 9005
 
 
-CMD [ "sh", "-c", "gunicorn -w 2 -b 0.0.0.0:${PORT} 'app:create_app'" ]
+CMD [ "sh", "-c", "gunicorn -w 2 -b 0.0.0.0:${PORT} \"app:create_app()\"" ]
