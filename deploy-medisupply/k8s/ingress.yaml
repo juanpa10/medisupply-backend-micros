@@ -18,6 +18,17 @@ metadata:
 spec:
   stripPrefix:
     prefixes: ["/roles"]
+
+---
+# --- Middleware: quita el prefijo /crm ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-crm
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/crm"]
 ---
 # --- IngressRoute (entryPoint "web" = :80) ---
 apiVersion: traefik.io/v1alpha1
@@ -50,6 +61,8 @@ spec:
           port: 80
     - kind: Rule
       match: PathPrefix(`/crm`)
+      middlewares:
+        - name: strip-crm
       services:
         - name: crm-service      # EXISTE
           port: 9004
