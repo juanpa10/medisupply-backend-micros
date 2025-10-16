@@ -1,3 +1,14 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-root-to-login
+  namespace: medisupply
+spec:
+  redirectRegex:
+    regex: ^/$
+    replacement: /login
+    permanent: false
+---
 # --- Middlewares: quitan los prefijos  /roles ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -31,7 +42,9 @@ spec:
         - name: roles-api      # EXISTE
           port: 9003
     - kind: Rule
-      match: PathPrefix(`/login`)      
+      match: PathPrefix(`/`)   
+      middlewares:
+        - name: redirect-root-to-login   
       services:
         - name: web-portal
           port: 80
