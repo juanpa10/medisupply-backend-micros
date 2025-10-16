@@ -145,19 +145,45 @@ jobs:
                   echo "   ECR image tag base: ${TAG_PREFIX}${IMG_NAME}-${SHA}"
                   echo "   K8s deployment:     ${DEPLOY_NAME}"
 
-                  # espera imagen en ECR con el nombre correcto
+                  # espera imagen en ECR con el nombre correcto; si no existe el tag full-SHA, intenta fallback a latest
+                  FULL_TAG="${TAG_PREFIX}${IMG_NAME}-${SHA}"
+                  LATEST_TAG="${TAG_PREFIX}${IMG_NAME}-latest"
+                  SELECTED_TAG="$FULL_TAG"
+
                   for i in $(seq 1 30); do
                     ok=$(aws ecr describe-images \
                         --repository-name "$ECR_REPO" \
-                        --image-ids imageTag="${TAG_PREFIX}${IMG_NAME}-${SHA}" \
+                        --image-ids imageTag="$FULL_TAG" \
                         --query 'imageDetails[0].imageDigest' \
                         --output text 2>/dev/null || true)
                     if [ -n "$ok" ] && [ "$ok" != "None" ]; then
-                      echo "   ✔ image ${TAG_PREFIX}${IMG_NAME}-${SHA} found"
+                      echo "   ✔ image $FULL_TAG found"
+                      SELECTED_TAG="$FULL_TAG"
                       break
                     fi
-                    echo "   …waiting image ${TAG_PREFIX}${IMG_NAME}-${SHA} ($i/30)"; sleep 4
+                    echo "   …waiting image $FULL_TAG ($i/30)"; sleep 4
                   done
+
+                  if [ -z "$ok" ] || [ "$ok" = "None" ]; then
+                    echo "   ⚠️ Full-SHA tag not found for $IMG_NAME, trying latest tag: $LATEST_TAG"
+                    for i in $(seq 1 10); do
+                      ok=$(aws ecr describe-images \
+                          --repository-name "$ECR_REPO" \
+                          --image-ids imageTag="$LATEST_TAG" \
+                          --query 'imageDetails[0].imageDigest' \
+                          --output text 2>/dev/null || true)
+                      if [ -n "$ok" ] && [ "$ok" != "None" ]; then
+                        echo "   ✔ image $LATEST_TAG found"
+                        SELECTED_TAG="$LATEST_TAG"
+                        break
+                      fi
+                      echo "   …waiting image $LATEST_TAG ($i/10)"; sleep 4
+                    done
+                  fi
+
+                  if [ -z "$ok" ] || [ "$ok" = "None" ]; then
+                    echo "   ⚠️ No image found for $IMG_NAME (tried $FULL_TAG and $LATEST_TAG). Will continue and kubectl may fail." 
+                  fi
 
                   # aplica manifests y cambia imagen del deployment real
                   sudo k3s kubectl apply -f "$BASE/k8s/$d/service.yaml"
@@ -168,7 +194,7 @@ jobs:
                     echo "   Found init-job for $d, applying with image tag"
                     TMP_JOB="/tmp/${d}-init-job.yaml"
                     cp "$BASE/k8s/$d/init-job.yaml" "$TMP_JOB"
-                    sed -i "s|REPLACED_BY_PIPELINE|$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}|g" "$TMP_JOB"
+                    sed -i "s|REPLACED_BY_PIPELINE|$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${SELECTED_TAG}|g" "$TMP_JOB"
                     # Remove any previous job with same name to avoid immutable field errors
                     sudo k3s kubectl -n medisupply delete job ${d}-init-db --ignore-not-found || true
                     sudo k3s kubectl -n medisupply delete pods -l job-name=${d}-init-db --ignore-not-found || true
@@ -189,7 +215,7 @@ jobs:
                   fi
 
                   CNAME=$(sudo k3s kubectl -n medisupply get deploy/${DEPLOY_NAME} -o jsonpath='{.spec.template.spec.containers[0].name}')
-                  IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}"
+                  IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${SELECTED_TAG}"
                   sudo k3s kubectl -n medisupply set image deploy/${DEPLOY_NAME} $CNAME=$IMG
                   sudo k3s kubectl -n medisupply rollout status deploy/${DEPLOY_NAME} --timeout=180s
                 fi
