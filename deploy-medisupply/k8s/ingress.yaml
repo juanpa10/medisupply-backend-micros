@@ -48,3 +48,8 @@ spec:
       services:
         - name: web-portal
           port: 80
+    - kind: Rule
+      match: PathPrefix(`/crm`)
+      services:
+        - name: crm-service      # EXISTE
+          port: 9004
