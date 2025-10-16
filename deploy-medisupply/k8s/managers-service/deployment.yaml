@@ -35,6 +35,8 @@ spec:
               value: app:create_app
             - name: PYTHONUNBUFFERED
               value: "1"
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service:9001"
           envFrom:
             - configMapRef: { name: medisupply-config }
           readinessProbe:
