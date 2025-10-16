@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: managers-init-db
+  name: managers-service-init-db
   namespace: medisupply
   labels: { app: managers-service, job: init-db }
 spec:

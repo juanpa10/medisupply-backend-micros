@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: crm-init-db
+  name: crm-service-init-db
   namespace: medisupply
   labels: { app: crm-service, job: init-db }
 spec:
