@@ -29,6 +29,17 @@ metadata:
 spec:
   stripPrefix:
     prefixes: ["/crm"]
+
+---
+# --- Middleware: quita el prefijo /managers ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-managers
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/managers"]
 ---
 # --- IngressRoute (entryPoint "web" = :80) ---
 apiVersion: traefik.io/v1alpha1
@@ -68,6 +79,8 @@ spec:
           port: 9004
     - kind: Rule
       match: PathPrefix(`/managers`)
+      middlewares:
+        - name: strip-managers
       services:
         - name: managers-service      # EXISTE
           port: 9005
