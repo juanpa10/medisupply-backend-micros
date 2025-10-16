@@ -85,3 +85,16 @@ def test_get_manager_by_email_includes_clients(client):
     j = r.get_json()
     assert j.get('email') == payload['email']
     assert isinstance(j.get('clients'), list) and len(j.get('clients')) >= 2
+
+
+def test_list_clients_returns_all(client):
+    # create two clients
+    c1 = client.post('/api/v1/clients', json={'name':'LC1','identifier':'LC1'})
+    assert c1.status_code == 201
+    c2 = client.post('/api/v1/clients', json={'name':'LC2','identifier':'LC2'})
+    assert c2.status_code == 201
+
+    r = client.get('/api/v1/clients')
+    assert r.status_code == 200
+    j = r.get_json()
+    assert isinstance(j, list) and any(c.get('identifier') == 'LC1' for c in j) and any(c.get('identifier') == 'LC2' for c in j)
