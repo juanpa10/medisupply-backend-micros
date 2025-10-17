@@ -59,10 +59,21 @@ curl -s -X PUT "http://localhost:9003/api/users/$UID/roles-permissions" \
   -d '{
         "assignments": [
           {
-            "role_id": '"$ROLE_ID"', "can_create": false, "can_edit": false, "can_delete": false, "can_view": true 
+            "role_id": "$ROLE_ID", "can_create": false, "can_edit": false, "can_delete": false, "can_view": true 
             }
         ]
       }'
-
+```
+```bash
+# Prueba el end point de control de acceso
+curl -X POST "http://localhost:9003/api/access-control" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+        "email": "juan@example.com",
+        "rol": "Admin",
+        "action": "create"
+      }'
+      
 ```
 
