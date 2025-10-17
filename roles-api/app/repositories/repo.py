@@ -55,3 +55,33 @@ class Repo:
             )
             self.session.add(assoc)
         self.session.commit(); self.session.refresh(u); return u
+    
+    def access_control(self, email, rol, action):
+        u = self.session.execute(select(User).filter_by(email=email)).scalars().first()
+        if not u:
+            return {"error": "user_not_exist"}, 200
+        
+        role = self.session.execute(select(Role).filter_by(name=rol)).scalars().first()
+        if not role:
+            raise ValueError("role_not_found")
+        
+        user_role = self.session.execute(
+            select(UserRole).filter_by(user_id=u.id, role_id=role.id)
+        ).scalars().first()
+        
+        if not user_role:
+            return type('Obj', (object,), {'email': email, 'rol': rol, 'action': action, 'permission': False})
+        
+        permission = False
+        if action == "create":
+            permission = user_role.can_create
+        elif action == "edit":
+            permission = user_role.can_edit
+        elif action == "delete":
+            permission = user_role.can_delete
+        elif action == "view":
+            permission = user_role.can_view
+        else:
+            raise ValueError("invalid_action")
+        
+        return type('Obj', (object,), {'email': email, 'rol': rol, 'action': action, 'permission': permission})
