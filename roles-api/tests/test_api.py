@@ -53,3 +53,16 @@ def test_set_user_roles_happy_path(client, admin_token):
     u1 = next(u for u in users if u["id"] == 1)
     names = {r["name"] for r in u1["roles"]}
     assert len(names) >= 1
+
+# Nuevo test para verificar control de acceso
+def test_access_control_requires_auth(client):
+    # Sin token debe rechazar
+    body = {"email": "juan@example.com", "rol": "Admin", "action": "create"}
+    r = client.post("/api/access-control", json=body)
+    assert r.status_code == 401
+
+def test_access_control(client, admin_token):
+    # Falta 'action'
+    body = {"email": "seed@demo.com", "rol": "admin"}
+    r = client.post("/api/access-control", headers=auth({}, admin_token), json=body)
+    assert r.status_code == 400

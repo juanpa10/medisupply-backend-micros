@@ -134,3 +134,13 @@ def create_role():
     if err: return err
     r = svc.create_role(data["name"], data.get("description"))
     return dict(id=r.id, name=r.name, description=r.description), 201
+
+##Se crea endpoint para verificar el control acceso de un usuario
+@bp.post("/access-control")
+@require_auth
+def access_control():
+    data = get_json()
+    err = require_fields(data, ["email","rol","action"])
+    if err: return err
+    r = svc.access_control(data["email"],data["rol"],data["action"])
+    return dict(email=r.email, rol=r.rol, action=r.action, permission=r.permission)

@@ -36,3 +36,9 @@ class RolesService:
                 self.repo.set_user_roles(u.id, [{"role_id": r.id, "can_create": True, "can_edit": True, "can_delete": True, "can_view": True}])
         return u
     def create_role(self, name,desc=None): return self.repo.create_role(name,desc)
+    
+    # Nuevo método para verificar control de acceso
+    def access_control(self, email, rol, action):
+        Obj = self.repo.access_control(email, rol, action)   
+        r = Obj()     
+        return r
