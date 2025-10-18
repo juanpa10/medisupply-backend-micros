@@ -325,7 +325,6 @@ class SupplierService:
         logger.info(f'Archivo de certificado guardado: {unique_filename} en {file_path_resolved}')
         
         # Guardar la ruta absoluta completa en la BD
-        # En Windows será: C:\Users\stiwa\...\crm-service\uploads\certificates\archivo.pdf
         # pathlib maneja automáticamente las barras invertidas
         return {
             'filename': original_filename,
