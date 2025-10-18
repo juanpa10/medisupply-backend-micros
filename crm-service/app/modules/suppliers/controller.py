@@ -1,7 +1,7 @@
 """
 Controladores (endpoints) para Suppliers
 """
-from flask import request, g
+from flask import request, g, send_file
 from marshmallow import ValidationError as MarshmallowValidationError
 from app.modules.suppliers.service import SupplierService
 from app.modules.suppliers.schemas import (
@@ -178,3 +178,33 @@ class SupplierController:
             data=stats,
             message='Estadísticas obtenidas exitosamente'
         )
+    
+    def get_certificate(self, supplier_id):
+        """
+        GET /api/v1/suppliers/<id>/certificate
+        Obtiene el certificado asociado al proveedor
+        """
+        try:
+            # Obtener información del certificado
+            certificate_info = self.service.get_supplier_certificate(supplier_id)
+            
+            # Enviar el archivo
+            return send_file(
+                certificate_info['path'],
+                mimetype=certificate_info['mime_type'],
+                as_attachment=True,
+                download_name=certificate_info['filename']
+            )
+        
+        except FileNotFoundError as e:
+            logger.error(f'Archivo de certificado no encontrado para proveedor {supplier_id}: {str(e)}')
+            return error_response(
+                message='Certificado no encontrado',
+                status_code=404
+            )
+        except Exception as e:
+            logger.error(f'Error al obtener certificado para proveedor {supplier_id}: {str(e)}')
+            return error_response(
+                message='Error al obtener el certificado',
+                status_code=500
+            )

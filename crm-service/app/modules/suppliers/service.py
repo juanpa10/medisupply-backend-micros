@@ -4,6 +4,7 @@ Servicio de lógica de negocio para Suppliers
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from werkzeug.datastructures import FileStorage
 from flask import current_app
 from app.modules.suppliers.repository import SupplierRepository
@@ -25,6 +26,41 @@ class SupplierService:
     
     def __init__(self):
         self.repository = SupplierRepository()
+    
+    @staticmethod
+    def _normalize_file_path(file_path: str) -> str:
+        """
+        Normaliza una ruta de archivo para que sea compatible con el sistema operativo.
+        Convierte rutas relativas a absolutas y maneja espacios y barras invertidas correctamente.
+        
+        Args:
+            file_path: Ruta del archivo (relativa o absoluta)
+            
+        Returns:
+            Ruta absoluta normalizada como string
+        """
+        # En Windows, las rutas pueden venir con barras simples o dobles desde la BD
+        # Path() maneja ambos casos automáticamente
+        path = Path(file_path)
+        
+        # Si es ruta relativa, convertir a absoluta desde el directorio raíz del proyecto
+        if not path.is_absolute():
+            # Obtener el directorio raíz del proyecto (3 niveles arriba desde este archivo)
+            current_file = Path(__file__).resolve()
+            app_root = current_file.parent.parent.parent
+            path = app_root / path
+        
+        # Resolver la ruta (elimina .., ., símbolos, etc.)
+        # Path.resolve() maneja automáticamente:
+        # - Espacios en las rutas
+        # - Barras invertidas en Windows (convierte / a \)
+        # - Barras normales en Linux/Mac
+        resolved_path = path.resolve()
+        
+        # Convertir a string con el formato nativo del SO
+        # En Windows: C:\Users\... (con barras invertidas)
+        # En Linux/Mac: /home/... (con barras normales)
+        return str(resolved_path)
     
     def create_supplier(self, data: dict, certificado: FileStorage, user: str = None) -> Supplier:
         """
@@ -178,6 +214,48 @@ class SupplierService:
         """
         return self.repository.get_by_nit(nit)
     
+    def get_supplier_certificate(self, supplier_id: int) -> dict:
+        """
+        Obtiene la información del certificado de un proveedor
+        
+        Args:
+            supplier_id: ID del proveedor
+            
+        Returns:
+            dict con información del archivo (path, filename, mime_type, size)
+            
+        Raises:
+            FileNotFoundError: Si el archivo no existe
+        """
+        # Obtener el proveedor
+        supplier = self.repository.get_by_id_or_fail(supplier_id)
+        
+        # Normalizar la ruta del archivo (maneja espacios, rutas relativas, etc.)
+        file_path = self._normalize_file_path(supplier.certificado_path)
+        
+        # Verificar que el archivo existe
+        if not os.path.exists(file_path):
+            logger.error(
+                f'Archivo de certificado no encontrado: {file_path} '
+                f'(ruta almacenada: {supplier.certificado_path}) '
+                f'para proveedor {supplier.razon_social} (ID: {supplier_id})'
+            )
+            raise FileNotFoundError(
+                'El archivo de certificado no existe en el servidor'
+            )
+        
+        logger.info(
+            f'Certificado solicitado para proveedor: {supplier.razon_social} '
+            f'(ID: {supplier_id}), ruta: {file_path}'
+        )
+        
+        return {
+            'path': file_path,
+            'filename': supplier.certificado_filename,
+            'mime_type': supplier.certificado_mime_type,
+            'size': supplier.certificado_size
+        }
+    
     def _process_certificate_file(self, file: FileStorage) -> dict:
         """
         Procesa y guarda el archivo de certificado
@@ -211,30 +289,47 @@ class SupplierService:
         extension = original_filename.rsplit('.', 1)[1].lower()
         unique_filename = f'{uuid.uuid4().hex}.{extension}'
         
-        # Crear directorio si no existe
-        upload_folder = current_app.config['UPLOAD_FOLDER']
-        certificates_folder = os.path.join(upload_folder, 'certificates')
-        os.makedirs(certificates_folder, exist_ok=True)
+        # Obtener el directorio raíz del proyecto (3 niveles arriba desde este archivo)
+        # Esto asegura que siempre trabajemos desde crm-service/ y no desde app/
+        current_file_path = Path(__file__).resolve()
+        project_root = current_file_path.parent.parent.parent  # Desde service.py -> suppliers -> modules -> app -> crm-service
         
-        # Ruta completa del archivo
-        file_path = os.path.join(certificates_folder, unique_filename)
+        # Construir la ruta usando el upload_folder de configuración
+        upload_folder_config = current_app.config['UPLOAD_FOLDER']
         
-        # Guardar archivo
-        file.save(file_path)
+        # Si upload_folder es relativo, convertirlo a absoluto desde project_root
+        upload_folder = Path(upload_folder_config)
+        if not upload_folder.is_absolute():
+            upload_folder = project_root / upload_folder
+        
+        certificates_folder = upload_folder / 'certificates'
+        certificates_folder.mkdir(parents=True, exist_ok=True)
+        
+        # Ruta completa del archivo usando pathlib
+        file_path = certificates_folder / unique_filename
+        
+        # Resolver la ruta para obtener la ruta absoluta normalizada
+        file_path_resolved = file_path.resolve()
+        
+        # Guardar archivo (convertir Path a string para FileStorage.save())
+        file.save(str(file_path_resolved))
         
         # Obtener tamaño del archivo
-        file_size = os.path.getsize(file_path)
+        file_size = file_path_resolved.stat().st_size
         
         # Obtener tipo MIME
         file.seek(0)
         import magic
         mime_type = magic.from_buffer(file.read(1024), mime=True)
         
-        logger.info(f'Archivo de certificado guardado: {unique_filename}')
+        logger.info(f'Archivo de certificado guardado: {unique_filename} en {file_path_resolved}')
         
+        # Guardar la ruta absoluta completa en la BD
+        # En Windows será: C:\Users\stiwa\...\crm-service\uploads\certificates\archivo.pdf
+        # pathlib maneja automáticamente las barras invertidas
         return {
             'filename': original_filename,
-            'path': file_path,
+            'path': str(file_path_resolved),  # Ruta absoluta normalizada para guardar en DB
             'mime_type': mime_type,
             'size': file_size
         }
@@ -247,8 +342,16 @@ class SupplierService:
             file_path: Ruta del archivo a eliminar
         """
         try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logger.info(f'Archivo eliminado: {file_path}')
+            # Normalizar la ruta del archivo
+            normalized_path = self._normalize_file_path(file_path)
+            
+            # Usar pathlib para manejo seguro
+            path = Path(normalized_path)
+            
+            if path.exists() and path.is_file():
+                path.unlink()  # Método de pathlib para eliminar archivos
+                logger.info(f'Archivo eliminado: {normalized_path}')
+            else:
+                logger.warning(f'Archivo no encontrado para eliminar: {normalized_path}')
         except Exception as e:
             logger.warning(f'No se pudo eliminar el archivo {file_path}: {str(e)}')
