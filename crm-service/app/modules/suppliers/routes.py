@@ -14,21 +14,21 @@ controller = SupplierController()
 
 # Rutas
 @suppliers_bp.route('', methods=['POST'])
-@require_auth
+# @require_auth
 def create_supplier():
     """Crear un nuevo proveedor"""
     return controller.create()
 
 
 @suppliers_bp.route('', methods=['GET'])
-@require_auth
+# @require_auth
 def get_suppliers():
     """Obtener todos los proveedores"""
     return controller.get_all()
 
 
 @suppliers_bp.route('/stats', methods=['GET'])
-@require_auth
+# @require_auth
 def get_suppliers_stats():
     """Obtener estadísticas de proveedores"""
     return controller.get_stats()
@@ -53,3 +53,10 @@ def update_supplier(supplier_id):
 def delete_supplier(supplier_id):
     """Eliminar un proveedor"""
     return controller.delete(supplier_id)
+
+
+@suppliers_bp.route('/<int:supplier_id>/certificate', methods=['GET'])
+# @require_auth
+def get_supplier_certificate(supplier_id):
+    """Obtener el certificado de un proveedor"""
+    return controller.get_certificate(supplier_id)

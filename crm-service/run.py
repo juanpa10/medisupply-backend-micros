@@ -10,7 +10,6 @@ app = create_app()
 
 if __name__ == '__main__':
     # Crear directorios necesarios
-    os.makedirs('uploads', exist_ok=True)
     os.makedirs('logs', exist_ok=True)
     
     # Ejecutar aplicación
