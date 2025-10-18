@@ -4,6 +4,8 @@ on:
   workflow_run:
     workflows: ["Build & Push to ECR (Kubernetes)"]   # debe coincidir EXACTO con el nombre del workflow de build
     types: [completed]
+  repository_dispatch: # dispatch que se usa desde el repo del frontend 
+    types: [deploy-from-front] 
   workflow_dispatch: {}
 
 permissions:
@@ -11,7 +13,7 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
+    if: ${{ github.event_name == 'repository_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,10 +94,41 @@ jobs:
             # SHA del build que terminó
             SHA="${{ github.event.workflow_run.head_sha }}"
 
-            # despliegue dinámico: cada carpeta de servicio (excepto db y yamls sueltos)
+            # >>> FRONT: manejo de deploy cuando viene desde el repo del front
+            EVENT="${{ github.event_name }}"
+            if [ "$EVENT" = "repository_dispatch" ]; then
+              echo "== Deploy triggered from FRONT (repository_dispatch) =="
+
+              # Rutas base (ya definiste BASE arriba)
+              K8S="$BASE/k8s"
+
+              # Aplica manifests del front (no rompe si ya existen)
+              [ -f "$K8S/web/service.yaml" ]    && sudo k3s kubectl apply -f "$K8S/web/service.yaml"    || true
+              [ -f "$K8S/web/deployment.yaml" ] && sudo k3s kubectl apply -f "$K8S/web/deployment.yaml" || true
+
+              # Calcula la imagen del front: usa el SHA enviado; si no vino, usa latest
+              WEB_SHA="${{ github.event.client_payload.web_sha }}"
+              if [ -n "$WEB_SHA" ]; then
+                WEB_TAG="k8s-web-${WEB_SHA}"
+              else
+                WEB_TAG="k8s-web-latest"
+              fi
+              WEB_IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${WEB_TAG}"
+
+              # Actualiza el deployment del front
+              sudo k3s kubectl -n medisupply set image deploy/web-portal web-portal="$WEB_IMG" || true
+              sudo k3s kubectl -n medisupply rollout status deploy/web-portal --timeout=180s || true
+              echo "Front updated to image: $WEB_IMG"
+
+              # Salir aquí para no correr el bucle de micros del back
+              exit 0
+            fi
+            # <<< FRONT
+
+            # despliegue dinámico: cada carpeta de servicio (excepto web, db y yamls sueltos)
             if [ -d "$BASE/k8s" ]; then
               for d in $(ls -1 "$BASE/k8s"); do
-                if [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
+                if [ "$d" = "web" ] || [ "$d" = "db" ] || [ "$d" = "namespace.yaml" ] || [ "$d" = "configmap.env.yaml" ] || [ "$d" = "ingress.yaml" ]; then
                   continue
                 fi
                 if [ -d "$BASE/k8s/$d" ] && [ -f "$BASE/k8s/$d/service.yaml" ] && [ -f "$BASE/k8s/$d/deployment.yaml" ]; then
