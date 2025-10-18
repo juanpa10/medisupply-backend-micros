@@ -107,12 +107,15 @@ jobs:
               [ -f "$K8S/web/deployment.yaml" ] && sudo k3s kubectl apply -f "$K8S/web/deployment.yaml" || true
 
               # Calcula la imagen del front: usa el SHA enviado; si no vino, usa latest
-              WEB_SHA="${{ github.event.client_payload.web_sha }}"
+              WEB_SHA="${{ github.event.client_payload.web_sha || '' }}"
+
               if [ -n "$WEB_SHA" ]; then
                 WEB_TAG="k8s-web-${WEB_SHA}"
               else
                 WEB_TAG="k8s-web-latest"
               fi
+              
+              echo "Using web image tag: $WEB_TAG"
               WEB_IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${WEB_TAG}"
 
               # Actualiza el deployment del front
@@ -166,6 +169,31 @@ jobs:
                   sudo k3s kubectl apply -f "$BASE/k8s/$d/service.yaml"
                   sudo k3s kubectl apply -f "$BASE/k8s/$d/deployment.yaml"
 
+                  # If there's an init-job.yaml, replace placeholder image and run the Job
+                  if [ -f "$BASE/k8s/$d/init-job.yaml" ]; then
+                    echo "   Found init-job for $d, applying with image tag"
+                    TMP_JOB="/tmp/${d}-init-job.yaml"
+                    cp "$BASE/k8s/$d/init-job.yaml" "$TMP_JOB"
+                    sed -i "s|REPLACED_BY_PIPELINE|$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}|g" "$TMP_JOB"
+                    # Remove any previous job with same name to avoid immutable field errors
+                    sudo k3s kubectl -n medisupply delete job ${d}-init-db --ignore-not-found || true
+                    sudo k3s kubectl -n medisupply delete pods -l job-name=${d}-init-db --ignore-not-found || true
+                    sudo k3s kubectl -n medisupply apply -f "$TMP_JOB"
+                    # wait for job to succeed (timeout ~300s)
+                    for i in $(seq 1 60); do
+                      succeeded=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "0")
+                      if [ "$succeeded" = "1" ]; then
+                        echo "   Init job ${d}-init-db succeeded"
+                        break
+                      fi
+                      echo "   Waiting for init job ${d}-init-db to complete ($i/60)"; sleep 5
+                    done
+                    echo "   Showing logs for job ${d}-init-db (if any):"
+                    sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
+                    # cleanup temporary job YAML
+                    rm -f "$TMP_JOB" || true
+                  fi
+
                   CNAME=$(sudo k3s kubectl -n medisupply get deploy/${DEPLOY_NAME} -o jsonpath='{.spec.template.spec.containers[0].name}')
                   IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}"
                   sudo k3s kubectl -n medisupply set image deploy/${DEPLOY_NAME} $CNAME=$IMG
@@ -173,4 +201,3 @@ jobs:
                 fi
               done
             fi
-

@@ -32,7 +32,7 @@ EXPOSE 9004
 
 # Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh && sed -i 's/\r$//' /entrypoint.sh
 
 # Use entrypoint to wait for DB and optionally init DB
 ENTRYPOINT ["/entrypoint.sh"]
