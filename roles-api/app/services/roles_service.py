@@ -18,8 +18,8 @@ class RolesService:
             admin_role = self.repo.get_role_by_name("Admin")
             if admin_role and u1:
                 self.repo.set_user_roles(u1.id, [{"role_id": admin_role.id, "can_create": True, "can_edit": True, "can_delete": True, "can_view": True}])
-                if u2:
-                    self.repo.set_user_roles(u2.id, [{"role_id": admin_role.id, "can_create": True, "can_edit": True, "can_delete": True, "can_view": True}])
+            if admin_role and u2:
+                self.repo.set_user_roles(u2.id, [{"role_id": admin_role.id, "can_create": True, "can_edit": True, "can_delete": True, "can_view": True}])
 
     def list_users_with_roles(self):
         return [map_user_with_roles(u) for u in self.repo.list_users()]
