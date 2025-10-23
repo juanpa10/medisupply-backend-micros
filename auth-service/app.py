@@ -43,6 +43,7 @@ else:
     # SQLAlchemy is only imported/used when DB is enabled
     from flask_sqlalchemy import SQLAlchemy
     from sqlalchemy import inspect, text
+    from sqlalchemy.exc import IntegrityError
     db = SQLAlchemy()
 
     # define User model at module scope so runtime code can use it
@@ -117,13 +118,17 @@ else:
                     if "names" in cols and not insert_data.get("names"):
                         insert_data["names"] = u.get("names") or u["email"]
 
-                    if insert_data:
-                        # Use a table insert that only writes existing columns
+                    if not insert_data:
+                        continue
+
+                    # Use a table insert that only writes existing columns. If the
+                    # user already exists (duplicate email), handle gracefully and
+                    # ensure role mapping is present.
+                    try:
                         db.session.execute(User.__table__.insert().values(**insert_data))
                         # If the users table doesn't support a native `role` column but
                         # the seed provided a role, persist it into `auth_user_roles`.
                         if 'role' not in cols and u.get('role'):
-                            # Try to find the inserted user's id and persist role
                             try:
                                 db.session.flush()
                                 row = db.session.execute(text("SELECT id FROM users WHERE email=:email LIMIT 1"), {'email': u['email']}).fetchone()
@@ -135,7 +140,73 @@ else:
                                     db.session.rollback()
                                 except Exception:
                                     pass
+                    except IntegrityError:
+                        # User already exists. Rollback and ensure role mapping or
+                        # users.role is updated for the existing user.
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                        try:
+                            # Find existing user's id only (role column may not exist)
+                            row = db.session.execute(text("SELECT id FROM users WHERE email=:email LIMIT 1"), {'email': u['email']}).fetchone()
+                            if row:
+                                uid = row[0]
+                                # If users table lacks `role` column, insert into auth_user_roles
+                                if 'role' not in cols and u.get('role'):
+                                    # only insert if not exists
+                                    exists = db.session.execute(text("SELECT 1 FROM auth_user_roles WHERE user_id=:uid AND role=:role LIMIT 1"), {'uid': uid, 'role': u.get('role')}).fetchone()
+                                    if not exists:
+                                        db.session.execute(AuthUserRole.__table__.insert().values(user_id=uid, role=u.get('role')))
+                                # If users.role exists but is empty/null, update it
+                                if 'role' in cols and u.get('role'):
+                                    # Check existing role value
+                                    erow = db.session.execute(text("SELECT role FROM users WHERE id=:uid LIMIT 1"), {'uid': uid}).fetchone()
+                                    existing_role = erow[0] if erow and len(erow) > 0 else None
+                                    if existing_role is None or existing_role == '':
+                                        db.session.execute(text("UPDATE users SET role=:role WHERE id=:uid"), {'role': u.get('role'), 'uid': uid})
+                        except Exception:
+                            try:
+                                db.session.rollback()
+                            except Exception:
+                                pass
                 db.session.commit()
+
+            # Backfill role mappings for seed users even if users table already
+            # contained rows (idempotent). This ensures that when the DB was
+            # partially seeded by other services or previous runs, the auth
+            # service still creates the necessary role mappings so login can
+            # resolve roles.
+            try:
+                data_all = json.loads(USERS_JSON)
+                for u in data_all:
+                    try:
+                        row = db.session.execute(text("SELECT id FROM users WHERE email=:email LIMIT 1"), {'email': u['email']}).fetchone()
+                        if not row:
+                            continue
+                        uid = row[0]
+                        if 'role' in cols and u.get('role'):
+                            # update users.role if missing
+                            erow = db.session.execute(text("SELECT role FROM users WHERE id=:uid LIMIT 1"), {'uid': uid}).fetchone()
+                            existing_role = erow[0] if erow and len(erow) > 0 else None
+                            if existing_role is None or existing_role == '':
+                                db.session.execute(text("UPDATE users SET role=:role WHERE id=:uid"), {'role': u.get('role'), 'uid': uid})
+                        elif u.get('role'):
+                            # users table lacks role column: insert into auth_user_roles if not present
+                            exists = db.session.execute(text("SELECT 1 FROM auth_user_roles WHERE user_id=:uid AND role=:role LIMIT 1"), {'uid': uid, 'role': u.get('role')}).fetchone()
+                            if not exists:
+                                db.session.execute(AuthUserRole.__table__.insert().values(user_id=uid, role=u.get('role')))
+                    except Exception:
+                        try:
+                            db.session.rollback()
+                        except Exception:
+                            pass
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
     def get_user_from_db(email: str):
         # Use a resilient raw-SQL approach: detect which columns exist and select only them.
@@ -172,12 +243,22 @@ else:
                 if not getattr(obj, 'role', None):
                     if 'user_roles' in inspect(db.engine).get_table_names():
                         try:
-                            r = db.session.execute(
-                                text(
-                                    "SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=:uid LIMIT 1"
-                                ),
-                                {"uid": obj.id},
-                            ).fetchone()
+                            # Prefer lookup by user id when available, otherwise join by email
+                            if getattr(obj, 'id', None):
+                                r = db.session.execute(
+                                    text(
+                                        "SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=:uid LIMIT 1"
+                                    ),
+                                    {"uid": obj.id},
+                                ).fetchone()
+                            else:
+                                # Some schemas / selects may not include `id` column; join using email
+                                r = db.session.execute(
+                                    text(
+                                        "SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id JOIN users u ON u.id=ur.user_id WHERE u.email=:email LIMIT 1"
+                                    ),
+                                    {"email": getattr(obj, 'email', None)},
+                                ).fetchone()
                             if r:
                                 obj.role = r[0]
                         except Exception:
@@ -188,7 +269,13 @@ else:
                 # If still missing, check our auth_user_roles fallback table
                 if not getattr(obj, 'role', None) and 'auth_user_roles' in inspect(db.engine).get_table_names():
                     try:
-                        r2 = db.session.execute(text("SELECT role FROM auth_user_roles WHERE user_id=:uid LIMIT 1"), {"uid": obj.id}).fetchone()
+                        if getattr(obj, 'id', None):
+                            r2 = db.session.execute(text("SELECT role FROM auth_user_roles WHERE user_id=:uid LIMIT 1"), {"uid": obj.id}).fetchone()
+                        else:
+                            r2 = db.session.execute(
+                                text("SELECT aur.role FROM auth_user_roles aur JOIN users u ON u.id=aur.user_id WHERE u.email=:email LIMIT 1"),
+                                {"email": getattr(obj, 'email', None)},
+                            ).fetchone()
                         if r2:
                             obj.role = r2[0]
                     except Exception:

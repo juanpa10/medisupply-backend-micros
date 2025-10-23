@@ -176,3 +176,11 @@ def get_manager_by_email_controller(email):
     clients = [c.to_dict() for c in mgr.clients] if getattr(mgr, 'clients', None) else []
     mgr_data['clients'] = clients
     return jsonify(mgr_data), 200
+
+
+@require_auth
+def list_clients_with_manager_controller():
+    """HTTP controller that returns clients with an extra 'manager' field (manager full_name or 'Sin Gerente')."""
+    from app.modules.managers.service import service
+    arr = service.list_clients_with_manager()
+    return jsonify(arr), 200

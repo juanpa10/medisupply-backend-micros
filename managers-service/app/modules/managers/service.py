@@ -1,6 +1,7 @@
 from app.modules.managers.repository import ManagerRepository
 from app.core.exceptions import ConflictError, ValidationError
 from datetime import datetime
+from app.config.database import db
 
 repo = ManagerRepository()
 
@@ -32,5 +33,24 @@ class ManagerService:
 
     def get_assignments_history(self, client_id: int = None):
         return repo.get_assignments(client_id)
+
+    def list_clients_with_manager(self):
+        """Return a list of clients with an extra field 'manager' that contains
+        the full_name of the linked AccountManager or the string 'Sin Gerente'
+        when no manager is assigned.
+        """
+        from app.modules.managers.models import Client
+        clients = db.session.query(Client).filter(Client.is_deleted == False).all()
+        out = []
+        for c in clients:
+            mgr = getattr(c, 'manager', None)
+            if mgr:
+                mgr_obj = {'id': mgr.id, 'full_name': mgr.full_name}
+            else:
+                mgr_obj = None
+            cd = c.to_dict()
+            cd['manager'] = mgr_obj
+            out.append(cd)
+        return out
 
 service = ManagerService()
