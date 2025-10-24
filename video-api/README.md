@@ -43,7 +43,7 @@ TOKEN=$(curl -s -X POST http://localhost:9001/auth/login   -H "Content-Type: app
 
 ### Subir foto (válida, ≤10 MB)
 ```bash
-curl -s -X POST "http://localhost:9020/evidence/upload"   -H "Authorization: Bearer $TOKEN"   -F "file=@/c/Users/andre/OneDrive/Imágenes/imagen.jpg"   -F "client_id=C1"   -F "product_id=P1"   -F "visit_id=V1"   -F "evidence_type=photo"   -F "lat=4.65"   -F "lon=-74.05" | jq .
+curl -s -X POST "http://localhost:9020/evidence/upload"   -H "Authorization: Bearer $TOKEN"   -F "file=@/c/Users/andre/OneDrive/Imágenes/imagen.jpg"   -F "client_id=C1"   -F "product_id=P1"   -F "visit_id=V1"   -F "evidence_type=photo"  | jq .
 ```
 
 ### Subir video (válido, ≤200 MB)
