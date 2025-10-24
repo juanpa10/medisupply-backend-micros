@@ -165,7 +165,7 @@ services:
       # Si más adelante migras a Postgres, ajustamos el código para usar DATABASE_URL.
       # DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
     ports:
-      - "9006:9005"   # host:container
+      - "9020:9020"   # host:container
     volumes:
       - video_uploads:/srv/app/data/uploads
     depends_on:
