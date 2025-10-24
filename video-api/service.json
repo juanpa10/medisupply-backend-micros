@@ -1,0 +1,7 @@
+{
+  "name": "video-api",
+  "port": 9005,
+  "language": "python",
+  "framework": "flask",
+  "description": "Evidencia visual: carga de fotos y videos con validación, metadatos y URLs firmadas"
+}

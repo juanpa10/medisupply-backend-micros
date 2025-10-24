@@ -152,5 +152,47 @@ services:
       timeout: 5s
       retries: 5
 
+  video-api:
+    build:
+      context: ./video-api
+    image: pyms-video-api:local
+    environment:
+      # Clave para firmar URLs temporales (cámbiala en prod)
+      SECRET_KEY: "supersecret"
+      # Carpeta de almacenamiento (privada en el contenedor)
+      UPLOAD_DIR: /srv/app/data/uploads
+      # Nota: actualmente video-api usa SQLite interno para metadatos.
+      # Si más adelante migras a Postgres, ajustamos el código para usar DATABASE_URL.
+      # DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+    ports:
+      - "9006:9005"   # host:container
+    volumes:
+      - video_uploads:/srv/app/data/uploads
+    depends_on:
+      # No requiere auth-service para arrancar, pero puedes añadirlo si quieres
+      # validar JWT en futuras versiones del servicio.
+      auth-service:
+        condition: service_started
+      # Si decides migrar a Postgres, descomenta esto:
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:9005/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   medisupply_pg_data:
+  video_uploads:
