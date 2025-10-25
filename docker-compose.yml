@@ -167,6 +167,53 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  reports-db:
+    image: postgres:16-alpine
+    container_name: reports-db
+    environment:
+      - POSTGRES_DB=reports
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - reports_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reports"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  reports-service:
+    build:
+      context: ./reports-service
+    image: pyms-reports-service:local
+    ports:
+      - "9007:9007"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@reports-db:5432/reports
+      INIT_DB: 'true'
+      JWT_SECRET: "supersecret"
+    depends_on:
+      reports-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:9007/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 
 
@@ -189,3 +236,4 @@ services:
 
 volumes:
   medisupply_pg_data:
+  reports_pg_data:

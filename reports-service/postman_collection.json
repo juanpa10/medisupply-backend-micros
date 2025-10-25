@@ -1,0 +1,46 @@
+{
+  "info": {
+    "name": "reports-service - collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5100/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5100",
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Generate report - product",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"criterion\": \"product\",\n  \"start\": \"{{start}}\",\n  \"end\": \"{{end}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5100/api/v1/reports",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "5100",
+          "path": ["api","v1","reports"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {"key": "start", "value": "2025-01-01"},
+    {"key": "end", "value": "2025-01-07"}
+  ]
+}

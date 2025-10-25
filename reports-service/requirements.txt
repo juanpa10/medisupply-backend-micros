@@ -1,0 +1,7 @@
+flask
+flask-restx
+sqlalchemy
+psycopg2-binary
+python-dateutil
+pytest
+pytest-benchmark
