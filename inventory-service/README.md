@@ -1,0 +1,569 @@
+# Inventory Service - Sistema de Gestión de Inventario
+
+Microservicio para la gestión de inventario, stock, ubicaciones y movimientos en bodegas del sistema MediSupply.
+
+## 📋 Descripción
+
+Inventory Service es un microservicio diseñado para cumplir con la **Historia de Usuario HU-22**: "Como operador logístico quiero localizar un producto en bodega en menos de un segundo".
+
+**IMPORTANTE**: Este microservicio maneja **únicamente el inventario** (stock, ubicaciones, lotes, movimientos). La información de productos (nombre, descripción, categoría, precios) se maneja en el microservicio `products-service`.
+
+### Separación de Responsabilidades
+
+| Microservicio | Responsabilidad |
+|---------------|-----------------|
+| **products-service** | Catálogo de productos: nombre, código, descripción, categoría, unidad de medida, proveedor, precios base |
+| **inventory-service** | Inventario: stock, ubicación física, lotes, fechas de vencimiento, bodegas, movimientos, reservas |
+
+### Características Principales
+
+✅ **Búsqueda ultra-rápida** (< 1 segundo) de ubicación de productos por `product_id`  
+✅ **Localización exacta** en bodega (pasillo, estantería, nivel)  
+✅ **Gestión de stock**: entradas, salidas, ajustes, transferencias  
+✅ **Reservas de stock** para órdenes de venta  
+✅ **Gestión de lotes** con fechas de vencimiento  
+✅ **Alertas**: stock bajo, stock alto, productos próximos a vencer  
+✅ **Historial de movimientos** completo con auditoría  
+✅ **Soporte multi-bodega** con identificación por bodega_id  
+✅ **API RESTful** con documentación completa  
+✅ **Autenticación JWT** integrada con auth-service  
+✅ **Dockerizado** para fácil despliegue
+
+## 🚀 Inicio Rápido
+
+### Requisitos Previos
+
+- Docker >= 20.10
+- Docker Compose >= 1.29
+- Python 3.11+ (para desarrollo local)
+- PostgreSQL 15+
+
+### Instalación con Docker
+
+```bash
+# 1. Clonar el repositorio
+cd inventory-service
+
+# 2. Copiar variables de entorno
+cp .env.example .env
+
+# 3. Levantar servicios
+docker-compose up -d
+
+# 4. Inicializar base de datos
+docker-compose exec inventory-service python init_db.py
+
+# 5. Verificar servicio
+curl http://localhost:5003/health
+```
+
+### Instalación Local (Desarrollo)
+
+```bash
+# 1. Crear entorno virtual
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+# 2. Instalar dependencias
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+
+# 3. Configurar variables de entorno
+cp .env.example .env
+
+# 4. Configurar base de datos PostgreSQL
+# Editar .env con credenciales de tu BD local
+
+# 5. Inicializar base de datos
+python init_db.py
+
+# 6. Ejecutar servicio
+python run.py
+```
+
+El servicio estará disponible en `http://localhost:5003`
+
+## 🔍 Funcionalidad Principal: Localización Rápida (HU-22)
+
+### Endpoint de Localización
+
+```http
+GET /api/v1/inventory/product/<product_id>/location
+```
+
+**Requisito**: Tiempo de respuesta < 1 segundo
+
+### Ejemplo de Uso
+
+```bash
+# Localizar producto en todas las bodegas
+curl "http://localhost:5003/api/v1/inventory/product/5/location" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Respuesta de Localización
+
+```json
+{
+  "success": true,
+  "message": "Producto encontrado en 2 ubicación(es)",
+  "data": [
+    {
+      "id": 15,
+      "product_id": 5,
+      "bodega_id": 1,
+      "bodega_nombre": "Bodega Principal",
+      "pasillo": "B",
+      "estanteria": "3",
+      "nivel": "2",
+      "ubicacion_completa": "Bodega Principal - Pasillo B - Estantería 3 - Nivel 2",
+      "tiene_ubicacion": true,
+      "lote": "L-2024-003",
+      "fecha_vencimiento": "2025-12-31",
+      "cantidad": "150.00",
+      "cantidad_reservada": "20.00",
+      "cantidad_disponible": "130.00",
+      "status": "available"
+    },
+    {
+      "id": 28,
+      "product_id": 5,
+      "bodega_id": 2,
+      "bodega_nombre": "Bodega Secundaria",
+      "pasillo": "C",
+      "estanteria": "1",
+      "nivel": "1",
+      "ubicacion_completa": "Bodega Secundaria - Pasillo C - Estantería 1 - Nivel 1",
+      "tiene_ubicacion": true,
+      "lote": "L-2024-004",
+      "fecha_vencimiento": "2025-06-30",
+      "cantidad": "80.00",
+      "cantidad_reservada": "0.00",
+      "cantidad_disponible": "80.00",
+      "status": "available"
+    }
+  ]
+}
+```
+
+## 📚 API Endpoints
+
+### Inventario (CRUD)
+
+| Método | Endpoint | Descripción | Autenticación |
+|--------|----------|-------------|---------------|
+| POST | `/api/v1/inventory` | Crear item de inventario | Sí |
+| GET | `/api/v1/inventory/<id>` | Obtener item por ID | Sí |
+| PUT | `/api/v1/inventory/<id>` | Actualizar item | Sí |
+| DELETE | `/api/v1/inventory/<id>` | Eliminar item | Sí |
+| GET | `/api/v1/inventory/search` | Buscar items con filtros | Sí |
+| GET | `/api/v1/inventory/search-product` | **NUEVO**: Buscar por nombre, código o referencia | Sí |
+
+### Localización (HU-22)
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/v1/inventory/product/<product_id>/location` | **Localizar producto <1s** |
+
+### Operaciones de Stock
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| POST | `/api/v1/inventory/<id>/adjust` | Ajustar stock (entrada/salida) |
+| POST | `/api/v1/inventory/<id>/reserve` | Reservar stock |
+| POST | `/api/v1/inventory/<id>/release` | Liberar stock reservado |
+| PUT | `/api/v1/inventory/<id>/location` | Actualizar ubicación física |
+
+### Alertas
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/v1/inventory/alerts/low-stock` | Items con stock bajo |
+| GET | `/api/v1/inventory/alerts/expiring` | Items próximos a vencer |
+
+### Movimientos
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/api/v1/inventory/movements` | Historial de movimientos |
+
+### Health Check
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| GET | `/health` | Estado del servicio |
+
+## 📦 Ejemplos de Uso
+
+### 1. Crear Item de Inventario
+
+```bash
+curl -X POST http://localhost:5003/api/v1/inventory \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "product_id": 5,
+    "bodega_id": 1,
+    "pasillo": "A",
+    "estanteria": "2",
+    "nivel": "3",
+    "lote": "L-2024-001",
+    "fecha_vencimiento": "2025-12-31",
+    "cantidad": 100,
+    "cantidad_minima": 10,
+    "cantidad_maxima": 500,
+    "status": "available"
+  }'
+```
+
+### 2. Ajustar Stock (Entrada)
+
+```bash
+curl -X POST http://localhost:5003/api/v1/inventory/15/adjust \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tipo": "entrada",
+    "cantidad": 50,
+    "motivo": "Compra a proveedor",
+    "documento_referencia": "OC-2024-001"
+  }'
+```
+
+### 3. Reservar Stock para Orden
+
+```bash
+curl -X POST http://localhost:5003/api/v1/inventory/15/reserve \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cantidad": 20,
+    "motivo": "Orden de venta",
+    "documento_referencia": "ORD-2024-0123"
+  }'
+```
+
+### 4. Actualizar Ubicación
+
+```bash
+curl -X PUT http://localhost:5003/api/v1/inventory/15/location \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pasillo": "B",
+    "estanteria": "5",
+    "nivel": "1"
+  }'
+```
+
+### 5. Buscar Inventario
+
+```bash
+# Buscar por producto y bodega
+curl "http://localhost:5003/api/v1/inventory/search?product_id=5&bodega_id=1" \
+  -H "Authorization: Bearer <token>"
+
+# Buscar items con stock bajo
+curl "http://localhost:5003/api/v1/inventory/search?stock_bajo=true" \
+  -H "Authorization: Bearer <token>"
+
+# Buscar por ubicación
+curl "http://localhost:5003/api/v1/inventory/search?pasillo=A&estanteria=2" \
+  -H "Authorization: Bearer <token>"
+
+# NUEVO: Buscar por nombre, código o referencia del producto
+curl "http://localhost:5003/api/v1/inventory/search-product?q=paracetamol" \
+  -H "Authorization: Bearer <token>"
+
+# Buscar por código de producto
+curl "http://localhost:5003/api/v1/inventory/search-product?q=MED-001" \
+  -H "Authorization: Bearer <token>"
+
+# Buscar y filtrar por bodega
+curl "http://localhost:5003/api/v1/inventory/search-product?q=ibuprofeno&bodega_id=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+**Respuesta de búsqueda por producto:**
+
+```json
+{
+  "success": true,
+  "message": "2 producto(s) encontrado(s) en inventario",
+  "data": [
+    {
+      "id": 15,
+      "product_id": 5,
+      "bodega_id": 1,
+      "bodega_nombre": "Bodega Principal",
+      "pasillo": "A",
+      "estanteria": "2",
+      "nivel": "3",
+      "ubicacion_completa": "Bodega Principal - Pasillo A - Estantería 2 - Nivel 3",
+      "lote": "L-2024-001",
+      "fecha_vencimiento": "2025-12-31",
+      "cantidad": "100.00",
+      "cantidad_reservada": "20.00",
+      "cantidad_disponible": "80.00",
+      "status": "available",
+      "product_info": {
+        "nombre": "Paracetamol 500mg",
+        "codigo": "MED-001",
+        "referencia": "REF-PARA-500",
+        "descripcion": "Analgésico y antipirético",
+        "categoria": "Medicamentos",
+        "unidad_medida": "tableta",
+        "proveedor": "Farmacéutica XYZ"
+      }
+    }
+  ]
+}
+```
+
+### 6. Obtener Alertas
+
+```bash
+# Stock bajo en bodega 1
+curl "http://localhost:5003/api/v1/inventory/alerts/low-stock?bodega_id=1" \
+  -H "Authorization: Bearer <token>"
+
+# Productos por vencer en 30 días
+curl "http://localhost:5003/api/v1/inventory/alerts/expiring?dias=30" \
+  -H "Authorization: Bearer <token>"
+```
+
+### 7. Consultar Movimientos
+
+```bash
+# Movimientos de un producto
+curl "http://localhost:5003/api/v1/inventory/movements?product_id=5" \
+  -H "Authorization: Bearer <token>"
+
+# Movimientos por tipo
+curl "http://localhost:5003/api/v1/inventory/movements?tipo=entrada" \
+  -H "Authorization: Bearer <token>"
+
+# Movimientos en rango de fechas
+curl "http://localhost:5003/api/v1/inventory/movements?fecha_desde=2024-01-01&fecha_hasta=2024-12-31" \
+  -H "Authorization: Bearer <token>"
+```
+
+## 🔐 Autenticación
+
+Todas las rutas (excepto `/health`) requieren autenticación JWT:
+
+```bash
+Authorization: Bearer <token>
+```
+
+El token se obtiene del servicio de autenticación:
+
+```bash
+# Login
+curl -X POST http://localhost:9001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}'
+```
+
+## 🏗️ Arquitectura
+
+### Modelo de Datos
+
+**NOTA IMPORTANTE**: Este servicio comparte la base de datos con `products-service`, permitiendo realizar JOINs eficientes sin llamadas HTTP entre microservicios. El modelo `Product` es de solo lectura (READ-ONLY) en este servicio.
+
+#### Tabla: inventory_items
+
+| Campo | Tipo | Descripción | Índice |
+|-------|------|-------------|--------|
+| id | Integer | ID único | PK |
+| **product_id** | Integer | **Referencia a products-service** | FK, Índice |
+| **bodega_id** | Integer | ID de bodega | Índice |
+| bodega_nombre | String(100) | Nombre de bodega | No |
+| **pasillo** | String(20) | Ubicación: Pasillo | Índice |
+| **estanteria** | String(20) | Ubicación: Estantería | Índice |
+| **nivel** | String(20) | Ubicación: Nivel | Índice |
+| **lote** | String(50) | Número de lote | Índice |
+| fecha_vencimiento | Date | Fecha de vencimiento | Índice |
+| cantidad | Numeric(10,2) | Stock total | No |
+| cantidad_reservada | Numeric(10,2) | Stock reservado | No |
+| cantidad_disponible | Numeric(10,2) | Stock disponible | No |
+| cantidad_minima | Numeric(10,2) | Stock mínimo (alerta) | No |
+| cantidad_maxima | Numeric(10,2) | Stock máximo (alerta) | No |
+| status | String(20) | Estado del inventario | No |
+| costo_almacenamiento | Numeric(10,2) | Costo de almacenamiento | No |
+| created_at | DateTime | Fecha de creación | No |
+| updated_at | DateTime | Última actualización | No |
+
+**Estados (InventoryStatus)**:
+- `available`: Disponible
+- `reserved`: Reservado
+- `quarantine`: En cuarentena
+- `damaged`: Dañado
+- `expired`: Vencido
+- `in_transit`: En tránsito
+
+**Índices para Performance**:
+- `idx_product_bodega`: (product_id, bodega_id) - Búsqueda rápida
+- `idx_location`: (pasillo, estanteria, nivel) - Búsqueda por ubicación
+- `idx_product_lote`: (product_id, lote) - Búsqueda por lote
+- `idx_vencimiento`: (fecha_vencimiento) - Alertas de vencimiento
+- `idx_stock_bajo`: WHERE cantidad <= cantidad_minima
+
+#### Tabla: inventory_movements
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| id | Integer | ID único |
+| inventory_item_id | Integer | FK a inventory_items |
+| product_id | Integer | Referencia a producto |
+| bodega_id | Integer | Bodega del movimiento |
+| **tipo** | String(20) | Tipo de movimiento |
+| cantidad | Numeric(10,2) | Cantidad movida |
+| cantidad_anterior | Numeric(10,2) | Stock antes del movimiento |
+| cantidad_nueva | Numeric(10,2) | Stock después del movimiento |
+| motivo | Text | Razón del movimiento |
+| documento_referencia | String(50) | OC, factura, orden, etc. |
+| usuario_id | Integer | Usuario que realizó el movimiento |
+| usuario_nombre | String(100) | Nombre del usuario |
+| lote | String(50) | Lote afectado |
+| fecha_movimiento | DateTime | Fecha/hora del movimiento |
+
+**Tipos de Movimiento (MovementType)**:
+- `entrada`: Ingreso de mercancía
+- `salida`: Salida de mercancía
+- `ajuste`: Ajuste de inventario
+- `transferencia`: Transferencia entre bodegas
+- `devolucion_cliente`: Devolución de cliente
+- `devolucion_proveedor`: Devolución a proveedor
+- `merma`: Pérdida o deterioro
+
+## ⚙️ Configuración
+
+### Variables de Entorno
+
+```bash
+# Flask
+FLASK_APP=run.py
+FLASK_ENV=development
+SECRET_KEY=your-secret-key-change-in-production
+
+# Servidor
+PORT=5003
+HOST=0.0.0.0
+
+# Base de Datos
+DATABASE_URL=postgresql://inventory_user:inventory_pass@localhost:5434/inventory_db
+
+# Auth Service
+AUTH_SERVICE_URL=http://localhost:9001
+
+# Products Service (para integración futura)
+PRODUCTS_SERVICE_URL=http://localhost:5002
+
+# Performance (HU-22)
+SEARCH_TIMEOUT=1.0              # Timeout de búsqueda en segundos
+MAX_RESULTS_PER_PAGE=100
+DEFAULT_PAGE_SIZE=20
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=logs/inventory-service.log
+```
+
+## 🧪 Testing
+
+```bash
+# Todos los tests
+pytest
+
+# Con coverage
+pytest --cov=app --cov-report=html
+
+# Tests específicos
+pytest tests/test_inventory.py
+pytest tests/test_movements.py
+pytest tests/test_search_performance.py
+```
+
+## 📊 Integración con Otros Servicios
+
+### products-service
+
+Este servicio referencia productos por `product_id`. Para obtener información del producto:
+
+```bash
+# En inventory-service obtenemos el product_id
+GET /api/v1/inventory/15
+# Response: {"product_id": 5, "cantidad": 100, ...}
+
+# Luego consultamos products-service
+GET http://localhost:5002/api/v1/products/5
+# Response: {"nombre": "Paracetamol 500mg", "codigo": "MED-001", ...}
+```
+
+### orders-service
+
+Reservas de stock para órdenes:
+
+1. orders-service crea una orden
+2. orders-service solicita reserva a inventory-service:
+   ```bash
+   POST /api/v1/inventory/15/reserve
+   ```
+3. inventory-service reduce `cantidad_disponible` y aumenta `cantidad_reservada`
+4. Se crea un movimiento de tipo `reserva`
+
+### Flujo de Integración
+
+```
+┌─────────────────┐    product_id    ┌──────────────────┐
+│ products-service│◄──────ref────────│inventory-service │
+└─────────────────┘                  └──────────────────┘
+                                              ▲
+                                              │ reserve_stock
+                                              │
+                                     ┌────────┴────────┐
+                                     │ orders-service  │
+                                     └─────────────────┘
+```
+
+## 🚀 Despliegue
+
+### Docker Compose
+
+```bash
+docker-compose up -d --build
+docker-compose logs -f inventory-service
+```
+
+### Kubernetes
+
+Consultar `deploy-medisupply/k8s/` para manifiestos.
+
+## 📈 Performance
+
+### Optimizaciones
+
+- ✅ Índices compuestos en (product_id, bodega_id)
+- ✅ Índices en ubicación (pasillo, estanteria, nivel)
+- ✅ Índices parciales para alertas
+- ✅ Connection pooling
+- ✅ Query optimization con SQLAlchemy
+
+### Benchmarks
+
+- Localización de producto: ~0.15s
+- Búsqueda con filtros: ~0.25s
+- Ajuste de stock: ~0.10s
+
+## 🔗 Servicios Relacionados
+
+- **auth-service**: http://localhost:9001 - Autenticación
+- **products-service**: http://localhost:5002 - Catálogo de productos
+- **crm-service**: http://localhost:5001 - Clientes
+- **orders-service**: http://localhost:5004 - Órdenes
+- **managers-service**: http://localhost:5005 - Gerentes
+
+---
+
+**Desarrollado para MediSupply Backend Microservices**
