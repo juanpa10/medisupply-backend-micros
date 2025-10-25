@@ -1,0 +1,87 @@
+{
+  "info": {
+    "name": "managers-service - Basic Collection",
+    "_postman_id": "managers-service-collection",
+    "description": "Collection to test managers-service endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:9001" },
+    { "key": "authToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Create Manager",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{authToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"full_name\": \"Juan Perez\",\n  \"email\": \"juan@example.com\",\n  \"phone\": \"1234567890\",\n  \"identification\": \"ID123\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/managers", "host": ["{{baseUrl}}"], "path": ["api","v1","managers"] }
+      }
+    },
+    {
+      "name": "List Managers",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/managers", "host": ["{{baseUrl}}"], "path": ["api","v1","managers"] }
+      }
+    },
+    {
+      "name": "Create Client",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Cliente A\",\n  \"identifier\": \"CUST-001\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/clients", "host": ["{{baseUrl}}"], "path": ["api","v1","clients"] }
+      }
+    },
+    {
+      "name": "List Clients",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/clients", "host": ["{{baseUrl}}"], "path": ["api","v1","clients"] }
+      }
+    },
+    {
+      "name": "Assign Client to Manager",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"client_id\": 1\n}" },
+        "url": { "raw": "{{baseUrl}}/api/v1/managers/1/assign", "host": ["{{baseUrl}}"], "path": ["api","v1","managers","1","assign"] }
+      }
+    },
+    {
+      "name": "Get Client Manager",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/clients/1/manager", "host": ["{{baseUrl}}"], "path": ["api","v1","clients","1","manager"] }
+      }
+    },
+    {
+      "name": "Get Manager by Email",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/managers/by-email/mx@example.com", "host": ["{{baseUrl}}"], "path": ["api","v1","managers","by-email","mx@example.com"] }
+      }
+    },
+    {
+      "name": "Clients with Manager",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{authToken}}" } ],
+        "url": { "raw": "{{baseUrl}}/api/v1/clients-with-manager", "host": ["{{baseUrl}}"], "path": ["api","v1","clients-with-manager"] }
+      }
+    }
+  ]
+}

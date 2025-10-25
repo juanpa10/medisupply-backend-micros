@@ -4,8 +4,31 @@ Configuración general de la aplicación
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
+from urllib.parse import quote_plus
 
 load_dotenv()
+
+
+def _build_database_uri():
+    """Build SQLALCHEMY_DATABASE_URI from env vars.
+
+    Priority:
+      1. DATABASE_URL env var (if provided)
+      2. Compose from DB_USER/DB_PASSWORD/DB_HOST/DB_PORT/DB_NAME or fallbacks
+    """
+    db_url = os.getenv('DATABASE_URL')
+    if db_url:
+        return db_url
+
+    # support common secret names used in k8s manifests
+    user = os.getenv('DB_USER') or os.getenv('POSTGRES_USER') or 'user'
+    password = os.getenv('DB_PASSWORD') or os.getenv('POSTGRES_PASSWORD') or 'password'
+    host = os.getenv('DB_HOST') or 'localhost'
+    port = os.getenv('DB_PORT') or '5432'
+    name = os.getenv('DB_NAME') or os.getenv('POSTGRES_DB') or 'crm_db'
+
+    # quote credentials to be safe with special characters
+    return f"postgresql://{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{name}"
 
 
 class Config:
@@ -15,7 +38,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     
     # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/crm_db')
+    SQLALCHEMY_DATABASE_URI = _build_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ECHO = False
     

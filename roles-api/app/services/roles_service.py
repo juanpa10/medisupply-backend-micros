@@ -42,6 +42,28 @@ class RolesService:
     
     # Nuevo método para verificar control de acceso
     def access_control(self, email, rol, action):
-        Obj = self.repo.access_control(email, rol, action)   
-        r = Obj()     
-        return r
+        # repo.access_control may return different shapes:
+        # - (dict, status) when user not found
+        # - a dict on some error paths
+        # - a class (created via type('Obj', ...)) which needs instantiation
+        # - an already-instantiated object
+        res = self.repo.access_control(email, rol, action)
+
+        # If repo returned a tuple like (dict, status) or a plain dict,
+        # normalize to an object with permission=False so controller can
+        # safely read attributes.
+        if isinstance(res, tuple) and len(res) >= 1 and isinstance(res[0], dict):
+            return type('Obj', (object,), {'email': email, 'rol': rol, 'action': action, 'permission': False})()
+        if isinstance(res, dict):
+            return type('Obj', (object,), {'email': email, 'rol': rol, 'action': action, 'permission': False})()
+
+        # If repo returned a class, instantiate it. If instantiation fails,
+        # fall back to a safe object.
+        if isinstance(res, type):
+            try:
+                return res()
+            except Exception:
+                return type('Obj', (object,), {'email': email, 'rol': rol, 'action': action, 'permission': False})()
+
+        # Otherwise assume it's already an object with the expected attrs.
+        return res

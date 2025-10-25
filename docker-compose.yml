@@ -134,6 +134,41 @@ services:
       retries: 5
 
 
+  orders-service:
+    build:
+      context: ./orders-service
+    image: pyms-orders-service:local
+    ports:
+      - "9006:9006"
+    environment:
+      JWT_SECRET: "supersecret"
+      JWT_ALGORITHM: "HS256"
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      FLASK_APP: app.app:create_app
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      auth-service:
+        condition: service_started
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:9006/api/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
 
   medisupply-db:
     image: postgres:16-alpine
