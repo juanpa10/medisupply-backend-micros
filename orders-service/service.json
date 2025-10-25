@@ -1,0 +1,9 @@
+{
+  "name": "orders-service",
+  "containerPort": 9006,
+  "pathPrefix": "/orders/*",
+  "healthPath": "/api/health",
+  "cpu": 256,
+  "memory": 512,
+  "desiredCount": 1
+}

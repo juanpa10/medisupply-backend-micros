@@ -1,0 +1,176 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+    "name": "medisupply - orders-service (simple)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Colección mínima para probar los endpoints principales de orders-service (importar en Postman)"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:9006/api/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "health"]
+        }
+      }
+    },
+    {
+      "name": "Create Order (Bearer)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_number\": \"ORD-1000\",\n  \"status\": \"pendiente\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:9006/api/orders",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "orders"]
+        }
+      }
+    },
+    {
+      "name": "Create Order (X-Customer-Id)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Customer-Id", "value": "cust-1" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_number\": \"ORD-2000\",\n  \"status\": \"pendiente\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:9006/api/orders",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "orders"]
+        }
+      }
+    },
+    {
+      "name": "Create Itemized Order (X-Customer-Id)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Customer-Id", "value": "cust-items" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"order_number\": \"ORD-7001\",\n  \"items\": [\n    { \"name\": \"Widget A\", \"unit_price\": 10.5, \"quantity\": 2 },\n    { \"name\": \"Widget B\", \"unit_price\": 5.0, \"quantity\": 1 }\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:9006/api/orders",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "orders"]
+        }
+      },
+      "response": [
+        {
+          "name": "Created itemized order",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:9006/api/orders"
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "_body": "{\n  \"order_number\": \"ORD-7001\",\n  \"status\": \"pendiente\",\n  \"monto\": 26.0\n}",
+          "header": []
+        }
+      ]
+    },
+    {
+      "name": "List Orders (Bearer)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "http://localhost:9006/api/orders",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "orders"]
+        }
+      }
+    },
+    {
+      "name": "Get Order by number",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Customer-Id", "value": "cust-1" }
+        ],
+        "url": {
+          "raw": "http://localhost:9006/api/orders/ORD-2000",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "orders", "ORD-2000"]
+        }
+      }
+      ,
+      "response": [
+        {
+          "name": "Example order with items",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:9006/api/orders/ORD-2000"
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_body": "{\n  \"order_number\": \"ORD-2000\",\n  \"status\": \"pendiente\",\n  \"monto\": 26.0,\n  \"items\": [\n    { \"product_name\": \"Widget A\", \"quantity\": 2, \"unit_price\": 10.5 },\n    { \"product_name\": \"Widget B\", \"quantity\": 1, \"unit_price\": 5.0 }\n  ]\n}",
+          "header": []
+        }
+      ]
+    },
+    {
+      "name": "Update Order Status",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Customer-Id", "value": "cust-1" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"transito\",\n  \"note\": \"Cambio de ejemplo\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:9006/api/orders/ORD-2000/status",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "9006",
+          "path": ["api", "orders", "ORD-2000", "status"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    { "key": "token", "value": "<JWT_TOKEN_HERE>", "type": "string" }
+  ]
+}
