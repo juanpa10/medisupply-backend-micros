@@ -130,6 +130,9 @@ jobs:
                 echo "Web rollout attempt $i failed; gathering debug info"
                 sudo k3s kubectl -n medisupply describe deploy/web-portal || true
                 sudo k3s kubectl -n medisupply get pods -o wide || true
+                # events and previous logs to help diagnose transient failures
+                sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
+                sudo k3s kubectl -n medisupply get pods -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
                 if [ "$i" -lt 3 ]; then
                   echo "Retrying rollout in 10s..."
                   sleep 10
@@ -207,8 +210,10 @@ jobs:
                         echo "   Init job ${d}-init-db reported failures (failed=${failed}), dumping describe/logs"
                         sudo k3s kubectl -n medisupply describe job ${d}-init-db || true
                         sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
-                        # also list pods related to the job
+                        # also list pods related to the job and dump previous logs and events
                         sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o wide || true
+                        sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
+                        sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
                         exit 1
                       fi
                       echo "   Waiting for init job ${d}-init-db to complete ($i/120)"; sleep 5
@@ -220,6 +225,8 @@ jobs:
                       sudo k3s kubectl -n medisupply describe job ${d}-init-db || true
                       sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
                       sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o wide || true
+                      sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
+                      sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
                       exit 1
                     fi
                     echo "   Showing logs for job ${d}-init-db (if any):"
@@ -240,6 +247,9 @@ jobs:
                     sudo k3s kubectl -n medisupply describe deploy/${DEPLOY_NAME} || true
                     # try to list pods filtered by common label 'app' then fallback to all pods and grep
                     sudo k3s kubectl -n medisupply get pods --selector=app=${DEPLOY_NAME} -o wide || sudo k3s kubectl -n medisupply get pods -o wide | grep ${DEPLOY_NAME} || true
+                    # events and previous logs for deployment pods
+                    sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
+                    sudo k3s kubectl -n medisupply get pods --selector=app=${DEPLOY_NAME} -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
                     if [ "$i" -lt 3 ]; then
                       echo "Retrying rollout for ${DEPLOY_NAME} in 10s..."
                       sleep 10
