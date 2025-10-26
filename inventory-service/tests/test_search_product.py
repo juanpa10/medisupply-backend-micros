@@ -291,5 +291,20 @@ class TestSearchProductEndpoint:
                 assert item['nivel'] in ubicacion
 
 
+    def test_search_internal_error_returns_500(self, client, auth_headers, monkeypatch):
+        # Simulate service raising an unexpected exception
+        from app.modules.inventory.controller import InventoryController
+
+        # Ensure auth passes so the controller is invoked
+        monkeypatch.setattr('app.core.auth.jwt_validator.JWTValidator.validate_token', staticmethod(lambda: ({'sub': '1', 'role': 'operator'}, None)))
+        # Patch the controller method to raise
+        monkeypatch.setattr(InventoryController, 'search_by_product', lambda self: (_ for _ in ()).throw(Exception('boom')))
+
+        response = client.get('/api/v1/inventory/search-product?q=paracetamol', headers=auth_headers)
+        assert response.status_code == 500
+        data = json.loads(response.data)
+        assert data['success'] is False
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
