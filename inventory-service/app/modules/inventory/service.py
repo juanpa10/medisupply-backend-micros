@@ -334,30 +334,38 @@ class InventoryService:
             bodega_id=bodega_id
         )
         
-        # Enriquecer respuesta con datos del producto
-        enriched_results = []
+        # Formato simplificado de respuesta
+        simplified_results = []
         for inventory_item, product in results:
-            item_dict = inventory_item.to_dict()
-            
-            # Agregar información del producto
-            item_dict['product_info'] = {
-                'nombre': product.nombre,
-                'codigo': product.codigo,
-                'referencia': product.referencia,
-                'descripcion': product.descripcion,
-                'categoria': product.categoria,
-                'unidad_medida': product.unidad_medida,
-                'proveedor': product.proveedor
+            result = {
+                'id': inventory_item.id,
+                'product_id': inventory_item.product_id,
+                'pasillo': inventory_item.pasillo,
+                'estanteria': inventory_item.estanteria,
+                'nivel': inventory_item.nivel,
+                'ubicacion': f"Pasillo {inventory_item.pasillo} - Estantería {inventory_item.estanteria} - Nivel {inventory_item.nivel}",
+                'cantidad': float(inventory_item.cantidad),
+                'status': inventory_item.status,
+                'created_at': inventory_item.created_at.isoformat() if inventory_item.created_at else None,
+                'updated_at': inventory_item.updated_at.isoformat() if inventory_item.updated_at else None,
+                'product_info': {
+                    'nombre': product.nombre,
+                    'codigo': product.codigo,
+                    'referencia': product.referencia,
+                    'descripcion': product.descripcion,
+                    'categoria': product.categoria,
+                    'unidad_medida': product.unidad_medida,
+                    'proveedor': product.proveedor
+                }
             }
-            
-            enriched_results.append(item_dict)
+            simplified_results.append(result)
         
         logger.info(
             f"Búsqueda de inventario completada: '{search_query}' - "
-            f"{len(enriched_results)} resultados"
+            f"{len(simplified_results)} resultados"
         )
         
-        return enriched_results
+        return simplified_results
     
     def get_low_stock_alerts(self, bodega_id: Optional[int] = None) -> List[InventoryItem]:
         """

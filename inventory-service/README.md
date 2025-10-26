@@ -1,32 +1,30 @@
 # Inventory Service - Sistema de Gestión de Inventario
 
-Microservicio para la gestión de inventario, stock, ubicaciones y movimientos en bodegas del sistema MediSupply.
+Microservicio simplificado para la búsqueda rápida de productos en inventario del sistema MediSupply.
 
 ## 📋 Descripción
 
 Inventory Service es un microservicio diseñado para cumplir con la **Historia de Usuario HU-22**: "Como operador logístico quiero localizar un producto en bodega en menos de un segundo".
 
-**IMPORTANTE**: Este microservicio maneja **únicamente el inventario** (stock, ubicaciones, lotes, movimientos). La información de productos (nombre, descripción, categoría, precios) se maneja en el microservicio `products-service`.
+**IMPORTANTE**: Este microservicio maneja **únicamente el inventario** (stock, ubicaciones, lotes). La información de productos (nombre, descripción, categoría, precios) se maneja en el microservicio `products-service`, con el cual comparte la misma base de datos PostgreSQL.
 
-### Separación de Responsabilidades
+### Arquitectura de Microservicios
 
-| Microservicio | Responsabilidad |
-|---------------|-----------------|
-| **products-service** | Catálogo de productos: nombre, código, descripción, categoría, unidad de medida, proveedor, precios base |
-| **inventory-service** | Inventario: stock, ubicación física, lotes, fechas de vencimiento, bodegas, movimientos, reservas |
+| Microservicio | Responsabilidad | Base de Datos |
+|---------------|-----------------|---------------|
+| **products-service** | Catálogo de productos: nombre, código, descripción, categoría, unidad de medida, proveedor, precios | PostgreSQL (tabla `products`) |
+| **inventory-service** | Inventario: stock, ubicación física, lotes, fechas de vencimiento, bodegas | PostgreSQL (tablas `inventory_items`, `inventory_movements`) |
+
+**Base de datos compartida**: Ambos microservicios usan la misma base de datos PostgreSQL para permitir JOINs eficientes entre productos e inventario.
 
 ### Características Principales
 
-✅ **Búsqueda ultra-rápida** (< 1 segundo) de ubicación de productos por `product_id`  
+✅ **Búsqueda ultra-rápida** (< 1 segundo) por nombre, código o referencia de producto  
 ✅ **Localización exacta** en bodega (pasillo, estantería, nivel)  
-✅ **Gestión de stock**: entradas, salidas, ajustes, transferencias  
-✅ **Reservas de stock** para órdenes de venta  
-✅ **Gestión de lotes** con fechas de vencimiento  
-✅ **Alertas**: stock bajo, stock alto, productos próximos a vencer  
-✅ **Historial de movimientos** completo con auditoría  
-✅ **Soporte multi-bodega** con identificación por bodega_id  
-✅ **API RESTful** con documentación completa  
+✅ **JOIN optimizado** entre productos e inventario para respuestas completas  
+✅ **API simplificada** con un solo endpoint de búsqueda  
 ✅ **Autenticación JWT** integrada con auth-service  
+✅ **Tests comprehensivos** con pytest (11 tests, 100% aprobación)  
 ✅ **Dockerizado** para fácil despliegue
 
 ## 🚀 Inicio Rápido
@@ -83,103 +81,126 @@ python run.py
 
 El servicio estará disponible en `http://localhost:5003`
 
-## 🔍 Funcionalidad Principal: Localización Rápida (HU-22)
+## 🔍 API: Búsqueda de Productos (HU-22)
 
-### Endpoint de Localización
+### Endpoint Principal
 
 ```http
-GET /api/v1/inventory/product/<product_id>/location
+GET /api/v1/inventory/search-product?q=<query>
 ```
 
 **Requisito**: Tiempo de respuesta < 1 segundo
 
-### Ejemplo de Uso
+**Autenticación**: JWT Bearer Token requerido
+
+**Parámetros**:
+- `q` (required): Término de búsqueda (mínimo 2 caracteres)
+  - Busca en: nombre del producto, código, referencia
+  - Búsqueda case-insensitive
+  - Soporta coincidencias parciales
+
+### Ejemplos de Uso
 
 ```bash
-# Localizar producto en todas las bodegas
-curl "http://localhost:5003/api/v1/inventory/product/5/location" \
+# Buscar por nombre de producto
+curl "http://localhost:5003/api/v1/inventory/search-product?q=Paracetamol" \
+  -H "Authorization: Bearer <token>"
+
+# Buscar por código de producto
+curl "http://localhost:5003/api/v1/inventory/search-product?q=MED-001" \
+  -H "Authorization: Bearer <token>"
+
+# Buscar por referencia
+curl "http://localhost:5003/api/v1/inventory/search-product?q=REF-PARA-500" \
+  -H "Authorization: Bearer <token>"
+
+# Búsqueda parcial (case-insensitive)
+curl "http://localhost:5003/api/v1/inventory/search-product?q=parace" \
   -H "Authorization: Bearer <token>"
 ```
 
-### Respuesta de Localización
+### Formato de Respuesta
 
 ```json
 {
   "success": true,
-  "message": "Producto encontrado en 2 ubicación(es)",
+  "message": "1 producto(s) encontrado(s)",
   "data": [
     {
-      "id": 15,
-      "product_id": 5,
-      "bodega_id": 1,
-      "bodega_nombre": "Bodega Principal",
-      "pasillo": "B",
-      "estanteria": "3",
-      "nivel": "2",
-      "ubicacion_completa": "Bodega Principal - Pasillo B - Estantería 3 - Nivel 2",
-      "tiene_ubicacion": true,
-      "lote": "L-2024-003",
-      "fecha_vencimiento": "2025-12-31",
-      "cantidad": "150.00",
-      "cantidad_reservada": "20.00",
-      "cantidad_disponible": "130.00",
-      "status": "available"
-    },
-    {
-      "id": 28,
-      "product_id": 5,
-      "bodega_id": 2,
-      "bodega_nombre": "Bodega Secundaria",
-      "pasillo": "C",
-      "estanteria": "1",
+      "id": 1,
+      "product_id": 1,
+      "pasillo": "A",
+      "estanteria": "01",
       "nivel": "1",
-      "ubicacion_completa": "Bodega Secundaria - Pasillo C - Estantería 1 - Nivel 1",
-      "tiene_ubicacion": true,
-      "lote": "L-2024-004",
-      "fecha_vencimiento": "2025-06-30",
-      "cantidad": "80.00",
-      "cantidad_reservada": "0.00",
-      "cantidad_disponible": "80.00",
-      "status": "available"
+      "ubicacion": "Pasillo A - Estantería 01 - Nivel 1",
+      "cantidad": 500.0,
+      "status": "available",
+      "created_at": "2024-10-26T10:30:00",
+      "updated_at": "2024-10-26T10:30:00",
+      "product_info": {
+        "nombre": "Paracetamol 500mg",
+        "codigo": "MED-001",
+        "referencia": "REF-PARA-500",
+        "descripcion": "Analgésico y antipirético",
+        "categoria": "Medicamentos",
+        "unidad_medida": "tableta",
+        "proveedor": "Farmacéutica XYZ"
+      }
     }
   ]
 }
 ```
 
-## 📚 API Endpoints
+### Códigos de Respuesta
 
-### Inventario (CRUD)
+- `200 OK`: Búsqueda exitosa (con o sin resultados)
+- `400 Bad Request`: Parámetro `q` faltante o muy corto (< 2 caracteres)
+- `401 Unauthorized`: Token JWT no proporcionado o inválido
+- `500 Internal Server Error`: Error del servidor
+
+## 🧪 Testing
+
+El servicio incluye una suite completa de tests con **11 tests comprehensivos** que cubren todos los casos de uso.
+
+### Ejecutar Tests
+
+```bash
+# Instalar dependencias de testing
+pip install pytest pytest-cov
+
+# Ejecutar todos los tests
+pytest tests/ -v
+
+# Ejecutar tests sin verificación de coverage
+pytest tests/test_search_product.py -v --no-cov
+
+# Ejecutar tests con reporte de coverage
+pytest tests/ -v --cov=app --cov-report=html
+```
+
+### Suite de Tests
+
+1. ✅ **test_search_without_query_parameter** - Valida error 400 sin parámetro `q`
+2. ✅ **test_search_with_short_query** - Valida error 400 con query < 2 caracteres
+3. ✅ **test_search_by_product_name** - Búsqueda por nombre de producto
+4. ✅ **test_search_by_product_code** - Búsqueda por código
+5. ✅ **test_search_by_product_reference** - Búsqueda por referencia
+6. ✅ **test_search_case_insensitive** - Verifica búsqueda case-insensitive
+7. ✅ **test_search_partial_match** - Verifica coincidencias parciales
+8. ✅ **test_search_no_results** - Manejo de búsquedas sin resultados
+9. ✅ **test_search_response_format** - Valida estructura exacta de respuesta JSON
+10. ✅ **test_search_without_authentication** - Verifica autenticación requerida
+11. ✅ **test_ubicacion_format** - Valida formato de campo `ubicacion`
+
+**Resultado**: ✅ 11 tests pasados, 0 fallos
+
+## 📚 API Endpoints (Versión Simplificada)
+
+### Búsqueda de Productos
 
 | Método | Endpoint | Descripción | Autenticación |
 |--------|----------|-------------|---------------|
-| POST | `/api/v1/inventory` | Crear item de inventario | Sí |
-| GET | `/api/v1/inventory/<id>` | Obtener item por ID | Sí |
-| PUT | `/api/v1/inventory/<id>` | Actualizar item | Sí |
-| DELETE | `/api/v1/inventory/<id>` | Eliminar item | Sí |
-| GET | `/api/v1/inventory/search` | Buscar items con filtros | Sí |
-| GET | `/api/v1/inventory/search-product` | **NUEVO**: Buscar por nombre, código o referencia | Sí |
-
-### Localización (HU-22)
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/api/v1/inventory/product/<product_id>/location` | **Localizar producto <1s** |
-
-### Operaciones de Stock
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| POST | `/api/v1/inventory/<id>/adjust` | Ajustar stock (entrada/salida) |
-| POST | `/api/v1/inventory/<id>/reserve` | Reservar stock |
-| POST | `/api/v1/inventory/<id>/release` | Liberar stock reservado |
-| PUT | `/api/v1/inventory/<id>/location` | Actualizar ubicación física |
-
-### Alertas
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/api/v1/inventory/alerts/low-stock` | Items con stock bajo |
-| GET | `/api/v1/inventory/alerts/expiring` | Items próximos a vencer |
+| GET | `/api/v1/inventory/search-product?q=<query>` | Buscar productos por nombre, código o referencia | Sí (JWT) |
 
 ### Movimientos
 

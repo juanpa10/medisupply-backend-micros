@@ -71,11 +71,9 @@ class TestingConfig(Config):
     TESTING = True
     DEBUG = True
     
-    # Base de datos en memoria para tests
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        'TEST_DATABASE_URL',
-        'postgresql://localhost/inventory_test_db'
-    )
+    # Base de datos en memoria para tests (SQLite)
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Deshabilitar CSRF para tests
     WTF_CSRF_ENABLED = False
