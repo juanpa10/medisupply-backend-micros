@@ -312,15 +312,13 @@ class InventoryService:
     
     def search_by_product_query(
         self,
-        search_query: str,
-        bodega_id: Optional[int] = None
+        search_query: str
     ) -> List[Dict[str, Any]]:
         """
         Busca inventario por nombre, código o referencia del producto
         
         Args:
             search_query: Texto a buscar (nombre, código o referencia)
-            bodega_id: Filtro opcional por bodega
             
         Returns:
             Lista de diccionarios con información de inventario y producto
@@ -330,8 +328,7 @@ class InventoryService:
         
         # Buscar con JOIN a tabla products
         results = self.repo.search_by_product_name_or_code(
-            search_query=search_query.strip(),
-            bodega_id=bodega_id
+            search_query=search_query.strip()
         )
         
         # Formato simplificado de respuesta
@@ -353,9 +350,9 @@ class InventoryService:
                     'codigo': product.codigo,
                     'referencia': product.referencia,
                     'descripcion': product.descripcion,
-                    'categoria': product.categoria,
-                    'unidad_medida': product.unidad_medida,
-                    'proveedor': product.proveedor
+                    'categoria_id': product.categoria_id,
+                    'unidad_medida_id': product.unidad_medida_id,
+                    'proveedor_id': product.proveedor_id
                 }
             }
             simplified_results.append(result)

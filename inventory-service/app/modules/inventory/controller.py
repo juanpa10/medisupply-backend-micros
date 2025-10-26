@@ -77,7 +77,7 @@ class InventoryController:
                 )
             
             # Ejecutar búsqueda
-            results = self.service.search_by_product_query(search_query, bodega_id=None)
+            results = self.service.search_by_product_query(search_query)
             
             return success_response(
                 data=results,

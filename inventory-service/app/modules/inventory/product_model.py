@@ -6,7 +6,7 @@ El inventory-service NO debe modificar esta tabla, solo consultarla.
 
 La gestión de productos (CRUD) es responsabilidad del products-service.
 """
-from sqlalchemy import Column, Integer, String, Numeric, Text, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Numeric, Text, Boolean, DateTime, ForeignKey
 from app.config.database import db
 
 
@@ -32,12 +32,12 @@ class Product(db.Model):
     referencia = Column(String(100), index=True)
     descripcion = Column(Text)
     
-    # Categorización
-    categoria = Column(String(100))
-    unidad_medida = Column(String(20))
+    # Categorización (Foreign Keys)
+    categoria_id = Column(Integer, ForeignKey('categorias.id'), index=True)
+    unidad_medida_id = Column(Integer, ForeignKey('unidades_medida.id'), index=True)
     
-    # Información del proveedor
-    proveedor = Column(String(200))
+    # Información del proveedor (Foreign Key)
+    proveedor_id = Column(Integer, ForeignKey('proveedores.id'), index=True)
     
     # Precios base
     precio_compra = Column(Numeric(10, 2))
@@ -66,9 +66,9 @@ class Product(db.Model):
             'codigo': self.codigo,
             'referencia': self.referencia,
             'descripcion': self.descripcion,
-            'categoria': self.categoria,
-            'unidad_medida': self.unidad_medida,
-            'proveedor': self.proveedor,
+            'categoria_id': self.categoria_id,
+            'unidad_medida_id': self.unidad_medida_id,
+            'proveedor_id': self.proveedor_id,
             'precio_compra': str(self.precio_compra) if self.precio_compra else None,
             'precio_venta': str(self.precio_venta) if self.precio_venta else None,
             'status': self.status

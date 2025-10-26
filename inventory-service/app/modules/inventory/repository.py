@@ -25,37 +25,24 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
     def __init__(self):
         super().__init__(InventoryItem)
     
-    def get_by_product_and_bodega(
-        self,
-        product_id: int,
-        bodega_id: int,
-        lote: Optional[str] = None
-    ) -> Optional[InventoryItem]:
+    def get_by_product(self, product_id: int) -> Optional[InventoryItem]:
         """
-        Obtiene item de inventario por product_id, bodega y lote
+        Obtiene primer item de inventario por product_id
         
         Args:
             product_id: ID del producto en products-service
-            bodega_id: ID de la bodega
-            lote: Lote opcional
             
         Returns:
             Item de inventario o None
         """
-        query = self.query().filter(
-            InventoryItem.product_id == product_id,
-            InventoryItem.bodega_id == bodega_id
-        )
-        
-        if lote:
-            query = query.filter(InventoryItem.lote == lote)
-        
-        return query.first()
+        return self.query().filter(
+            InventoryItem.product_id == product_id
+        ).first()
     
     def get_all_by_product(self, product_id: int) -> List[InventoryItem]:
         """
         Obtiene todos los items de inventario de un producto
-        (puede estar en múltiples bodegas con diferentes lotes)
+        (puede haber múltiples ubicaciones para el mismo producto)
         
         Args:
             product_id: ID del producto
@@ -66,13 +53,14 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         return self.query().filter(
             InventoryItem.product_id == product_id
         ).order_by(
-            InventoryItem.bodega_id,
-            InventoryItem.lote
+            InventoryItem.pasillo,
+            InventoryItem.estanteria,
+            InventoryItem.nivel
         ).all()
     
     def find_product_location(self, product_id: int) -> List[InventoryItem]:
         """
-        Localiza un producto en todas las bodegas
+        Localiza un producto en todas las ubicaciones
         Optimizado para < 1 segundo (HU-22)
         
         Args:
@@ -81,13 +69,12 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         Returns:
             Lista de ubicaciones donde se encuentra el producto
         """
-        logger.info(f"Localizando producto {product_id} en bodegas")
+        logger.info(f"Localizando producto {product_id} en bodega")
         
         items = self.query().filter(
             InventoryItem.product_id == product_id,
             InventoryItem.cantidad > 0
         ).order_by(
-            InventoryItem.bodega_id,
             InventoryItem.pasillo,
             InventoryItem.estanteria,
             InventoryItem.nivel
@@ -98,8 +85,7 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
     
     def search_by_product_name_or_code(
         self,
-        search_query: str,
-        bodega_id: Optional[int] = None
+        search_query: str
     ) -> List[Tuple[InventoryItem, Product]]:
         """
         Busca inventario por nombre, código o referencia del producto
@@ -107,7 +93,6 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         
         Args:
             search_query: Texto a buscar en nombre, código o referencia
-            bodega_id: Filtro opcional por bodega
             
         Returns:
             Lista de tuplas (InventoryItem, Product) que coinciden con la búsqueda
@@ -130,10 +115,6 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             )
         )
         
-        # Filtrar por bodega si se especifica
-        if bodega_id:
-            query = query.filter(InventoryItem.bodega_id == bodega_id)
-        
         # Solo productos activos y con stock
         query = query.filter(
             Product.status == 'active',
@@ -141,10 +122,9 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             InventoryItem.cantidad > 0
         )
         
-        # Ordenar por nombre de producto y bodega
+        # Ordenar por nombre de producto
         query = query.order_by(
             Product.nombre,
-            InventoryItem.bodega_id,
             InventoryItem.pasillo
         )
         
@@ -156,26 +136,20 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
     def search_inventory(
         self,
         product_id: Optional[int] = None,
-        bodega_id: Optional[int] = None,
-        lote: Optional[str] = None,
         status: Optional[str] = None,
         pasillo: Optional[str] = None,
         estanteria: Optional[str] = None,
-        nivel: Optional[str] = None,
-        stock_bajo: bool = False
+        nivel: Optional[str] = None
     ) -> List[InventoryItem]:
         """
         Busca items de inventario con múltiples filtros
         
         Args:
             product_id: Filtro por producto
-            bodega_id: Filtro por bodega
-            lote: Filtro por lote
             status: Filtro por estado
             pasillo: Filtro por pasillo
             estanteria: Filtro por estantería
             nivel: Filtro por nivel
-            stock_bajo: Solo items con stock bajo
             
         Returns:
             Lista de items que coinciden
@@ -184,12 +158,6 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         
         if product_id:
             query = query.filter(InventoryItem.product_id == product_id)
-        
-        if bodega_id:
-            query = query.filter(InventoryItem.bodega_id == bodega_id)
-        
-        if lote:
-            query = query.filter(InventoryItem.lote == lote)
         
         if status:
             query = query.filter(InventoryItem.status == status)
@@ -203,20 +171,12 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         if nivel:
             query = query.filter(InventoryItem.nivel == nivel)
         
-        if stock_bajo:
-            query = query.filter(
-                InventoryItem.cantidad_minima.isnot(None),
-                InventoryItem.cantidad_disponible < InventoryItem.cantidad_minima
-            )
-        
         return query.order_by(
-            InventoryItem.bodega_id,
             InventoryItem.product_id
         ).all()
     
     def get_by_location(
         self,
-        bodega_id: int,
         pasillo: str,
         estanteria: Optional[str] = None,
         nivel: Optional[str] = None
@@ -225,7 +185,6 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         Obtiene items por ubicación en bodega
         
         Args:
-            bodega_id: ID de la bodega
             pasillo: Pasillo
             estanteria: Estantería (opcional)
             nivel: Nivel (opcional)
@@ -234,7 +193,6 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             Lista de items en la ubicación
         """
         query = self.query().filter(
-            InventoryItem.bodega_id == bodega_id,
             InventoryItem.pasillo == pasillo
         )
         
@@ -246,13 +204,10 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         
         return query.order_by(InventoryItem.product_id).all()
     
-    def get_items_without_location(self, bodega_id: Optional[int] = None) -> List[InventoryItem]:
+    def get_items_without_location(self) -> List[InventoryItem]:
         """
         Obtiene items sin ubicación asignada
         
-        Args:
-            bodega_id: Filtro opcional por bodega
-            
         Returns:
             Lista de items sin ubicación
         """
@@ -264,82 +219,11 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             )
         )
         
-        if bodega_id:
-            query = query.filter(InventoryItem.bodega_id == bodega_id)
-        
         return query.order_by(InventoryItem.product_id).all()
-    
-    def get_low_stock_items(self, bodega_id: Optional[int] = None) -> List[InventoryItem]:
-        """
-        Obtiene items con stock bajo (cantidad_disponible < cantidad_minima)
-        
-        Args:
-            bodega_id: Filtro opcional por bodega
-            
-        Returns:
-            Lista de items con stock bajo
-        """
-        query = self.query().filter(
-            InventoryItem.cantidad_minima.isnot(None),
-            InventoryItem.cantidad_disponible < InventoryItem.cantidad_minima
-        )
-        
-        if bodega_id:
-            query = query.filter(InventoryItem.bodega_id == bodega_id)
-        
-        return query.order_by(InventoryItem.cantidad_disponible).all()
-    
-    def get_high_stock_items(self, bodega_id: Optional[int] = None) -> List[InventoryItem]:
-        """
-        Obtiene items con stock alto (cantidad > cantidad_maxima)
-        
-        Args:
-            bodega_id: Filtro opcional por bodega
-            
-        Returns:
-            Lista de items con stock alto
-        """
-        query = self.query().filter(
-            InventoryItem.cantidad_maxima.isnot(None),
-            InventoryItem.cantidad > InventoryItem.cantidad_maxima
-        )
-        
-        if bodega_id:
-            query = query.filter(InventoryItem.bodega_id == bodega_id)
-        
-        return query.order_by(InventoryItem.cantidad.desc()).all()
-    
-    def get_expiring_soon(
-        self,
-        dias: int = 30,
-        bodega_id: Optional[int] = None
-    ) -> List[InventoryItem]:
-        """
-        Obtiene items próximos a vencer
-        
-        Args:
-            dias: Días de anticipación (default 30)
-            bodega_id: Filtro opcional por bodega
-            
-        Returns:
-            Lista de items próximos a vencer
-        """
-        fecha_limite = date.today() + datetime.timedelta(days=dias)
-        
-        query = self.query().filter(
-            InventoryItem.fecha_vencimiento.isnot(None),
-            InventoryItem.fecha_vencimiento <= fecha_limite,
-            InventoryItem.cantidad > 0
-        )
-        
-        if bodega_id:
-            query = query.filter(InventoryItem.bodega_id == bodega_id)
-        
-        return query.order_by(InventoryItem.fecha_vencimiento).all()
     
     def get_total_stock_by_product(self, product_id: int) -> float:
         """
-        Calcula el stock total de un producto en todas las bodegas
+        Calcula el stock total de un producto en todas las ubicaciones
         
         Args:
             product_id: ID del producto
@@ -357,7 +241,7 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
     
     def get_available_stock_by_product(self, product_id: int) -> float:
         """
-        Calcula el stock disponible de un producto (sin reservas)
+        Calcula el stock disponible de un producto
         
         Args:
             product_id: ID del producto
@@ -369,7 +253,7 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             InventoryItem.product_id == product_id,
             InventoryItem.status == InventoryStatus.AVAILABLE.value
         ).with_entities(
-            func.sum(InventoryItem.cantidad_disponible)
+            func.sum(InventoryItem.cantidad)
         ).scalar()
         
         return float(result) if result else 0.0
@@ -428,7 +312,6 @@ class InventoryMovementRepository(BaseRepository[InventoryMovement]):
     def search_movements(
         self,
         product_id: Optional[int] = None,
-        bodega_id: Optional[int] = None,
         inventory_item_id: Optional[int] = None,
         tipo: Optional[str] = None,
         fecha_desde: Optional[date] = None,
@@ -439,7 +322,6 @@ class InventoryMovementRepository(BaseRepository[InventoryMovement]):
         
         Args:
             product_id: Filtro por producto
-            bodega_id: Filtro por bodega
             inventory_item_id: Filtro por item de inventario
             tipo: Filtro por tipo de movimiento
             fecha_desde: Fecha inicial
@@ -452,9 +334,6 @@ class InventoryMovementRepository(BaseRepository[InventoryMovement]):
         
         if product_id:
             query = query.filter(InventoryMovement.product_id == product_id)
-        
-        if bodega_id:
-            query = query.filter(InventoryMovement.bodega_id == bodega_id)
         
         if inventory_item_id:
             query = query.filter(InventoryMovement.inventory_item_id == inventory_item_id)
@@ -476,24 +355,17 @@ class InventoryMovementRepository(BaseRepository[InventoryMovement]):
     
     def get_recent_movements(
         self,
-        bodega_id: Optional[int] = None,
         limit: int = 50
     ) -> List[InventoryMovement]:
         """
         Obtiene movimientos recientes
         
         Args:
-            bodega_id: Filtro opcional por bodega
             limit: Número de movimientos
             
         Returns:
             Lista de movimientos recientes
         """
-        query = self.query()
-        
-        if bodega_id:
-            query = query.filter(InventoryMovement.bodega_id == bodega_id)
-        
-        return query.order_by(
+        return self.query().order_by(
             InventoryMovement.fecha_movimiento.desc()
         ).limit(limit).all()

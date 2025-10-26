@@ -82,14 +82,18 @@ class TestSearchProductEndpoint:
             assert 'codigo' in product_info
             assert 'referencia' in product_info
             assert 'descripcion' in product_info
-            assert 'categoria' in product_info
-            assert 'unidad_medida' in product_info
-            assert 'proveedor' in product_info
+            assert 'categoria_id' in product_info
+            assert 'unidad_medida_id' in product_info
+            assert 'proveedor_id' in product_info
             
             # Verificar valores
             assert product_info['nombre'] == 'Paracetamol 500mg'
             assert product_info['codigo'] == 'MED-001'
             assert item['cantidad'] == 500.0
+            # Verificar que los IDs son enteros
+            assert isinstance(product_info['categoria_id'], int)
+            assert isinstance(product_info['unidad_medida_id'], int)
+            assert isinstance(product_info['proveedor_id'], int)
     
     def test_search_by_product_code(self, client, auth_headers, sample_inventory):
         """Test 4: Búsqueda por código de producto debe retornar resultados"""
@@ -239,12 +243,17 @@ class TestSearchProductEndpoint:
                 # Verificar campos de product_info
                 product_info_fields = [
                     'nombre', 'codigo', 'referencia', 'descripcion',
-                    'categoria', 'unidad_medida', 'proveedor'
+                    'categoria_id', 'unidad_medida_id', 'proveedor_id'
                 ]
                 
                 for field in product_info_fields:
                     assert field in item['product_info'], \
                         f"Campo '{field}' faltante en product_info"
+                
+                # Verificar que los campos de ID son enteros
+                assert isinstance(item['product_info']['categoria_id'], int)
+                assert isinstance(item['product_info']['unidad_medida_id'], int)
+                assert isinstance(item['product_info']['proveedor_id'], int)
     
     def test_search_without_authentication(self, client):
         """Test 10: Búsqueda sin autenticación debe retornar error 401"""

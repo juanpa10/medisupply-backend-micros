@@ -13,7 +13,31 @@ from app import create_app
 from app.config.database import db
 from app.modules.inventory.models import InventoryItem
 from app.modules.inventory.product_model import Product
+from sqlalchemy import Column, Integer, String
 from datetime import date, timedelta
+
+
+# Modelos mock para tablas referenciadas por Product (solo para tests)
+class Categoria(db.Model):
+    """Modelo mock de categorías para tests"""
+    __tablename__ = 'categorias'
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(100))
+
+
+class UnidadMedida(db.Model):
+    """Modelo mock de unidades de medida para tests"""
+    __tablename__ = 'unidades_medida'
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(50))
+    abreviatura = Column(String(10))
+
+
+class Proveedor(db.Model):
+    """Modelo mock de proveedores para tests"""
+    __tablename__ = 'proveedores'
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(200))
 
 
 @pytest.fixture(scope='function')
@@ -24,6 +48,30 @@ def app():
     with app.app_context():
         # Crear todas las tablas
         db.create_all()
+        
+        # Crear datos de referencia necesarios para los Foreign Keys
+        # Categorías
+        categorias = [
+            Categoria(id=1, nombre="Medicamentos"),
+            Categoria(id=4, nombre="Antidiabéticos")
+        ]
+        db.session.bulk_save_objects(categorias)
+        
+        # Unidades de medida
+        unidades = [
+            UnidadMedida(id=1, nombre="Unidad", abreviatura="UND")
+        ]
+        db.session.bulk_save_objects(unidades)
+        
+        # Proveedores
+        proveedores = [
+            Proveedor(id=1, nombre="Proveedor 1"),
+            Proveedor(id=2, nombre="Proveedor 2"),
+            Proveedor(id=6, nombre="Proveedor 6")
+        ]
+        db.session.bulk_save_objects(proveedores)
+        
+        db.session.commit()
         
         yield app
         
@@ -59,9 +107,9 @@ def sample_products(db_session):
             codigo="MED-001",
             referencia="REF-PARA-500",
             descripcion="Analgésico y antipirético",
-            categoria="Medicamentos",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica XYZ",
+            categoria_id=1,
+            unidad_medida_id=1,
+            proveedor_id=1,
             precio_compra=0.50,
             precio_venta=1.20,
             status="active",
@@ -73,9 +121,9 @@ def sample_products(db_session):
             codigo="MED-002",
             referencia="REF-IBU-400",
             descripcion="Antiinflamatorio no esteroideo",
-            categoria="Medicamentos",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica ABC",
+            categoria_id=1,
+            unidad_medida_id=1,
+            proveedor_id=2,
             precio_compra=0.60,
             precio_venta=1.50,
             status="active",
@@ -87,9 +135,9 @@ def sample_products(db_session):
             codigo="MED-006",
             referencia="REF-MET-850",
             descripcion="Antidiabético oral",
-            categoria="Endocrinología",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica MNO",
+            categoria_id=4,
+            unidad_medida_id=1,
+            proveedor_id=6,
             precio_compra=0.40,
             precio_venta=1.00,
             status="active",
@@ -109,50 +157,26 @@ def sample_inventory(db_session, sample_products):
     items = [
         InventoryItem(
             product_id=1,
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="A",
             estanteria="01",
             nivel="1",
-            lote="LOT-2024-001",
-            fecha_vencimiento=date.today() + timedelta(days=730),
             cantidad=500,
-            cantidad_reservada=0,
-            cantidad_disponible=500,
-            cantidad_minima=100,
-            cantidad_maxima=1000,
             status="available"
         ),
         InventoryItem(
             product_id=2,
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="A",
             estanteria="02",
             nivel="1",
-            lote="LOT-2024-002",
-            fecha_vencimiento=date.today() + timedelta(days=700),
             cantidad=300,
-            cantidad_reservada=0,
-            cantidad_disponible=300,
-            cantidad_minima=80,
-            cantidad_maxima=800,
             status="available"
         ),
         InventoryItem(
             product_id=3,
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="B",
             estanteria="03",
             nivel="2",
-            lote="LOT-2024-006",
-            fecha_vencimiento=date.today() + timedelta(days=650),
             cantidad=350,
-            cantidad_reservada=0,
-            cantidad_disponible=350,
-            cantidad_minima=80,
-            cantidad_maxima=700,
             status="available"
         ),
     ]

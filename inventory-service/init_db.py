@@ -44,6 +44,7 @@ def create_sample_products():
     
     NOTA: Normalmente estos productos se crean desde products-service.
     Aquí los creamos solo para propósitos de testing y demostración.
+    Los campos categoria_id, unidad_medida_id y proveedor_id son Foreign Keys.
     """
     print("🏷️  Creando productos de muestra...")
     
@@ -53,9 +54,9 @@ def create_sample_products():
             codigo="MED-001",
             referencia="REF-PARA-500",
             descripcion="Analgésico y antipirético",
-            categoria="Medicamentos",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica XYZ",
+            categoria_id=1,  # Medicamentos
+            unidad_medida_id=1,  # tableta
+            proveedor_id=1,  # Farmacéutica XYZ
             precio_compra=0.50,
             precio_venta=1.20,
             status="active",
@@ -66,9 +67,9 @@ def create_sample_products():
             codigo="MED-002",
             referencia="REF-IBU-400",
             descripcion="Antiinflamatorio no esteroideo",
-            categoria="Medicamentos",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica ABC",
+            categoria_id=1,  # Medicamentos
+            unidad_medida_id=1,  # tableta
+            proveedor_id=2,  # Farmacéutica ABC
             precio_compra=0.60,
             precio_venta=1.50,
             status="active",
@@ -79,9 +80,9 @@ def create_sample_products():
             codigo="MED-003",
             referencia="REF-AMO-500",
             descripcion="Antibiótico de amplio espectro",
-            categoria="Antibióticos",
-            unidad_medida="cápsula",
-            proveedor="Farmacéutica DEF",
+            categoria_id=2,  # Antibióticos
+            unidad_medida_id=2,  # cápsula
+            proveedor_id=3,  # Farmacéutica DEF
             precio_compra=0.80,
             precio_venta=2.00,
             status="active",
@@ -92,9 +93,9 @@ def create_sample_products():
             codigo="MED-004",
             referencia="REF-OME-20",
             descripcion="Inhibidor de la bomba de protones",
-            categoria="Medicamentos",
-            unidad_medida="cápsula",
-            proveedor="Farmacéutica GHI",
+            categoria_id=1,  # Medicamentos
+            unidad_medida_id=2,  # cápsula
+            proveedor_id=4,  # Farmacéutica GHI
             precio_compra=0.70,
             precio_venta=1.80,
             status="active",
@@ -105,9 +106,9 @@ def create_sample_products():
             codigo="MED-005",
             referencia="REF-LOS-50",
             descripcion="Antihipertensivo",
-            categoria="Cardiovascular",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica JKL",
+            categoria_id=3,  # Cardiovascular
+            unidad_medida_id=1,  # tableta
+            proveedor_id=5,  # Farmacéutica JKL
             precio_compra=0.90,
             precio_venta=2.20,
             status="active",
@@ -118,9 +119,9 @@ def create_sample_products():
             codigo="MED-006",
             referencia="REF-MET-850",
             descripcion="Antidiabético oral",
-            categoria="Endocrinología",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica MNO",
+            categoria_id=4,  # Endocrinología
+            unidad_medida_id=1,  # tableta
+            proveedor_id=6,  # Farmacéutica MNO
             precio_compra=0.40,
             precio_venta=1.00,
             status="active",
@@ -131,9 +132,9 @@ def create_sample_products():
             codigo="MED-007",
             referencia="REF-SIM-20",
             descripcion="Hipolipemiante",
-            categoria="Cardiovascular",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica PQR",
+            categoria_id=3,  # Cardiovascular
+            unidad_medida_id=1,  # tableta
+            proveedor_id=7,  # Farmacéutica PQR
             precio_compra=0.75,
             precio_venta=1.90,
             status="active",
@@ -144,9 +145,9 @@ def create_sample_products():
             codigo="MED-008",
             referencia="REF-ENA-10",
             descripcion="Antihipertensivo IECA",
-            categoria="Cardiovascular",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica STU",
+            categoria_id=3,  # Cardiovascular
+            unidad_medida_id=1,  # tableta
+            proveedor_id=8,  # Farmacéutica STU
             precio_compra=0.55,
             precio_venta=1.40,
             status="active",
@@ -157,9 +158,9 @@ def create_sample_products():
             codigo="MED-009",
             referencia="REF-ASP-100",
             descripcion="Antiagregante plaquetario",
-            categoria="Cardiovascular",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica VWX",
+            categoria_id=3,  # Cardiovascular
+            unidad_medida_id=1,  # tableta
+            proveedor_id=9,  # Farmacéutica VWX
             precio_compra=0.30,
             precio_venta=0.80,
             status="active",
@@ -170,9 +171,9 @@ def create_sample_products():
             codigo="MED-010",
             referencia="REF-CET-10",
             descripcion="Antihistamínico",
-            categoria="Alergias",
-            unidad_medida="tableta",
-            proveedor="Farmacéutica YZA",
+            categoria_id=5,  # Alergias
+            unidad_medida_id=1,  # tableta
+            proveedor_id=10,  # Farmacéutica YZA
             precio_compra=0.45,
             precio_venta=1.10,
             status="active",
@@ -190,203 +191,101 @@ def create_sample_inventory_items():
     """
     Crea items de inventario de muestra
     
-    Los product_id (1-15) corresponden a productos en products-service.
-    Aquí solo se almacena: stock, ubicación, lote, bodega.
+    Los product_id (1-10) corresponden a productos en la tabla products.
+    Aquí solo se almacena: stock y ubicación en bodega.
     """
     print("📋 Creando items de inventario de muestra...")
     
     items = [
-        # Bodega 1 - Principal
+        # Items con ubicación en bodega
         InventoryItem(
-            product_id=1,  # Paracetamol 500mg (existe en products-service)
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
+            product_id=1,  # Paracetamol 500mg
             pasillo="A",
             estanteria="01",
             nivel="1",
-            lote="LOT-2024-001",
-            fecha_vencimiento=date.today() + timedelta(days=730),
             cantidad=500,
-            cantidad_reservada=50,
-            cantidad_disponible=450,
-            cantidad_minima=100,
-            cantidad_maxima=1000,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=15.50
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=2,  # Ibuprofeno 400mg
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="A",
             estanteria="02",
             nivel="1",
-            lote="LOT-2024-002",
-            fecha_vencimiento=date.today() + timedelta(days=700),
             cantidad=300,
-            cantidad_reservada=20,
-            cantidad_disponible=280,
-            cantidad_minima=80,
-            cantidad_maxima=800,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=12.00
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=3,  # Amoxicilina 500mg
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="A",
             estanteria="03",
             nivel="2",
-            lote="LOT-2024-003",
-            fecha_vencimiento=date.today() + timedelta(days=600),
             cantidad=200,
-            cantidad_reservada=30,
-            cantidad_disponible=170,
-            cantidad_minima=50,
-            cantidad_maxima=500,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=18.00
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=4,  # Omeprazol 20mg
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="B",
             estanteria="01",
             nivel="1",
-            lote="LOT-2024-004",
-            fecha_vencimiento=date.today() + timedelta(days=550),
             cantidad=400,
-            cantidad_reservada=40,
-            cantidad_disponible=360,
-            cantidad_minima=100,
-            cantidad_maxima=800,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=14.00
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=5,  # Losartán 50mg
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="B",
             estanteria="02",
             nivel="1",
-            lote="LOT-2024-005",
-            fecha_vencimiento=date.today() + timedelta(days=800),
             cantidad=250,
-            cantidad_reservada=25,
-            cantidad_disponible=225,
-            cantidad_minima=60,
-            cantidad_maxima=600,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=16.50
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=6,  # Metformina 850mg
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="B",
             estanteria="03",
             nivel="2",
-            lote="LOT-2024-006",
-            fecha_vencimiento=date.today() + timedelta(days=650),
             cantidad=350,
-            cantidad_reservada=35,
-            cantidad_disponible=315,
-            cantidad_minima=80,
-            cantidad_maxima=700,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=13.00
-        ),
-        
-        # Bodega 2 - Secundaria
-        InventoryItem(
-            product_id=1,  # Paracetamol 500mg (mismo producto, otra bodega)
-            bodega_id=2,
-            bodega_nombre="Bodega Secundaria",
-            pasillo="X",
-            estanteria="10",
-            nivel="1",
-            lote="LOT-2024-101",
-            fecha_vencimiento=date.today() + timedelta(days=720),
-            cantidad=150,
-            cantidad_reservada=10,
-            cantidad_disponible=140,
-            cantidad_minima=50,
-            cantidad_maxima=300,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=10.00
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=7,  # Simvastatina 20mg
-            bodega_id=2,
-            bodega_nombre="Bodega Secundaria",
-            pasillo="X",
-            estanteria="11",
+            pasillo="C",
+            estanteria="01",
             nivel="1",
-            lote="LOT-2024-007",
-            fecha_vencimiento=date.today() + timedelta(days=700),
             cantidad=180,
-            cantidad_reservada=15,
-            cantidad_disponible=165,
-            cantidad_minima=40,
-            cantidad_maxima=400,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=11.50
+            status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
             product_id=8,  # Enalapril 10mg
-            bodega_id=2,
-            bodega_nombre="Bodega Secundaria",
-            pasillo="Y",
-            estanteria="01",
-            nivel="1",
-            lote="LOT-2024-008",
-            fecha_vencimiento=date.today() + timedelta(days=680),
-            cantidad=220,
-            cantidad_reservada=20,
-            cantidad_disponible=200,
-            cantidad_minima=50,
-            cantidad_maxima=500,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=12.50
-        ),
-        
-        # Items con alertas de stock
-        InventoryItem(
-            product_id=9,  # Aspirina 100mg - STOCK BAJO
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
-            pasillo="C",
-            estanteria="01",
-            nivel="1",
-            lote="LOT-2024-009",
-            fecha_vencimiento=date.today() + timedelta(days=600),
-            cantidad=30,  # Menor al mínimo
-            cantidad_reservada=5,
-            cantidad_disponible=25,
-            cantidad_minima=50,
-            cantidad_maxima=400,
-            status=InventoryStatus.AVAILABLE.value,
-            costo_almacenamiento=9.00
-        ),
-        InventoryItem(
-            product_id=10,  # Producto próximo a vencer
-            bodega_id=1,
-            bodega_nombre="Bodega Principal",
             pasillo="C",
             estanteria="02",
+            nivel="2",
+            cantidad=220,
+            status=InventoryStatus.AVAILABLE.value
+        ),
+        InventoryItem(
+            product_id=9,  # Aspirina 100mg
+            pasillo="C",
+            estanteria="03",
             nivel="1",
-            lote="LOT-2023-010",
-            fecha_vencimiento=date.today() + timedelta(days=30),  # Vence en 30 días
-            cantidad=80,
-            cantidad_reservada=0,
-            cantidad_disponible=80,
-            cantidad_minima=20,
-            cantidad_maxima=200,
-            status=InventoryStatus.QUARANTINE.value,  # En cuarentena por vencimiento cercano
-            costo_almacenamiento=8.00
+            cantidad=600,
+            status=InventoryStatus.AVAILABLE.value
+        ),
+        InventoryItem(
+            product_id=10,  # Cetirizina 10mg
+            pasillo="D",
+            estanteria="01",
+            nivel="1",
+            cantidad=150,
+            status=InventoryStatus.AVAILABLE.value
+        ),
+        # Item adicional del mismo producto en otra ubicación
+        InventoryItem(
+            product_id=1,  # Paracetamol 500mg (otra ubicación)
+            pasillo="D",
+            estanteria="02",
+            nivel="2",
+            cantidad=100,
+            status=InventoryStatus.AVAILABLE.value
         ),
     ]
     
@@ -401,8 +300,8 @@ def create_sample_movements():
     print("📊 Creando movimientos de inventario de muestra...")
     
     # Obtener algunos items para crear movimientos
-    item1 = InventoryItem.query.filter_by(product_id=1, bodega_id=1).first()
-    item2 = InventoryItem.query.filter_by(product_id=2, bodega_id=1).first()
+    item1 = InventoryItem.query.filter_by(product_id=1).first()
+    item2 = InventoryItem.query.filter_by(product_id=2).first()
     
     if not item1 or not item2:
         print("⚠️  No se encontraron items para crear movimientos")
@@ -413,7 +312,6 @@ def create_sample_movements():
         InventoryMovement(
             inventory_item_id=item1.id,
             product_id=item1.product_id,
-            bodega_id=item1.bodega_id,
             tipo=MovementType.ENTRADA.value,
             cantidad=500,
             cantidad_anterior=0,
@@ -422,14 +320,12 @@ def create_sample_movements():
             documento_referencia="OC-2024-001",
             usuario_id=1,
             usuario_nombre="Admin Sistema",
-            lote=item1.lote,
             fecha_movimiento=datetime.utcnow() - timedelta(days=30)
         ),
         # Salida por venta
         InventoryMovement(
             inventory_item_id=item1.id,
             product_id=item1.product_id,
-            bodega_id=item1.bodega_id,
             tipo=MovementType.SALIDA.value,
             cantidad=50,
             cantidad_anterior=500,
@@ -438,14 +334,12 @@ def create_sample_movements():
             documento_referencia="INV-2024-0123",
             usuario_id=2,
             usuario_nombre="Operador Ventas",
-            lote=item1.lote,
             fecha_movimiento=datetime.utcnow() - timedelta(days=15)
         ),
         # Entrada para item2
         InventoryMovement(
             inventory_item_id=item2.id,
             product_id=item2.product_id,
-            bodega_id=item2.bodega_id,
             tipo=MovementType.ENTRADA.value,
             cantidad=300,
             cantidad_anterior=0,
@@ -454,14 +348,12 @@ def create_sample_movements():
             documento_referencia="OC-2024-002",
             usuario_id=1,
             usuario_nombre="Admin Sistema",
-            lote=item2.lote,
             fecha_movimiento=datetime.utcnow() - timedelta(days=25)
         ),
         # Ajuste de inventario
         InventoryMovement(
             inventory_item_id=item2.id,
             product_id=item2.product_id,
-            bodega_id=item2.bodega_id,
             tipo=MovementType.AJUSTE.value,
             cantidad=20,
             cantidad_anterior=300,
@@ -470,7 +362,6 @@ def create_sample_movements():
             documento_referencia="AJ-2024-001",
             usuario_id=1,
             usuario_nombre="Admin Sistema",
-            lote=item2.lote,
             fecha_movimiento=datetime.utcnow() - timedelta(days=10)
         ),
     ]
