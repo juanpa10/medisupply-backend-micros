@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  inventory-db:
+    image: postgres:15-alpine
+    container_name: inventory-db
+    environment:
+      POSTGRES_DB: inventory_db
+      POSTGRES_USER: inventory_user
+      POSTGRES_PASSWORD: inventory_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - inventory_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inventory_user -d inventory_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - medisupply-network
+
+  inventory-service:
+    build: .
+    container_name: inventory-service
+    ports:
+      - "5003:5003"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://inventory_user:inventory_pass@inventory-db:5432/inventory_db
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-key}
+      - AUTH_SERVICE_URL=http://auth-service:9001
+      - PORT=5003
+    depends_on:
+      inventory-db:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+    networks:
+      - medisupply-network
+    restart: unless-stopped
+
+volumes:
+  inventory_db_data:
+
+networks:
+  medisupply-network:
+    external: true
