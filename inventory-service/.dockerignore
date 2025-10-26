@@ -46,7 +46,9 @@ docs/
 # Development files
 Makefile
 docker-compose.yml
+# exclude shell scripts by default but allow project entrypoint
 *.sh
+!entrypoint.sh
 
 # Uploads (desarrollo)
 uploads/
