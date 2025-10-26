@@ -15,6 +15,8 @@ jobs:
   deploy:
     if: ${{ github.event_name == 'repository_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
+    # Give the deploy job more headroom to run long remote commands (installing k3s, waiting jobs/rollouts)
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -193,15 +195,33 @@ jobs:
                     sudo k3s kubectl -n medisupply delete job ${d}-init-db --ignore-not-found || true
                     sudo k3s kubectl -n medisupply delete pods -l job-name=${d}-init-db --ignore-not-found || true
                     sudo k3s kubectl -n medisupply apply -f "$TMP_JOB"
-                    # wait for job to succeed (timeout ~300s)
-                    for i in $(seq 1 60); do
+                    # wait for job to succeed (timeout ~600s). Detect failures early and dump debug info.
+                    for i in $(seq 1 120); do
                       succeeded=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "0")
+                      failed=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.failed}' 2>/dev/null || echo "0")
                       if [ "$succeeded" = "1" ]; then
                         echo "   Init job ${d}-init-db succeeded"
                         break
                       fi
-                      echo "   Waiting for init job ${d}-init-db to complete ($i/60)"; sleep 5
+                      if [ "$failed" != "0" ] && [ "$failed" != "" ]; then
+                        echo "   Init job ${d}-init-db reported failures (failed=${failed}), dumping describe/logs"
+                        sudo k3s kubectl -n medisupply describe job ${d}-init-db || true
+                        sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
+                        # also list pods related to the job
+                        sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o wide || true
+                        exit 1
+                      fi
+                      echo "   Waiting for init job ${d}-init-db to complete ($i/120)"; sleep 5
                     done
+                    # if loop finished without success, gather diagnostics
+                    succeeded=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "0")
+                    if [ "$succeeded" != "1" ]; then
+                      echo "   Init job ${d}-init-db did not complete in time, dumping describe/logs"
+                      sudo k3s kubectl -n medisupply describe job ${d}-init-db || true
+                      sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
+                      sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o wide || true
+                      exit 1
+                    fi
                     echo "   Showing logs for job ${d}-init-db (if any):"
                     sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
                     # cleanup temporary job YAML
