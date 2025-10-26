@@ -39,6 +39,9 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script_stop: true
           script: |
+            # debug: print early connectivity info and enable shell trace
+            set -x
+            echo "SSH connected (clean dir): $(whoami)@$(hostname)"; date
             sudo rm -rf /tmp/medisupply
             mkdir -p /tmp/medisupply
 
@@ -65,7 +68,10 @@ jobs:
           script_stop: true
           envs: AWS_REGION,AWS_ACCOUNT_ID,ECR_REPO,TAG_PREFIX
           script: |
+            # debug: print early connectivity info and enable shell trace
             set -e
+            set -x
+            echo "SSH connected (install/deploy): $(whoami)@$(hostname)"; date; uname -a; id
             BASE="/tmp/medisupply/out/deploy-medisupply"
 
             # instala k3s si subiste el script
