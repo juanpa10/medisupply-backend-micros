@@ -1,7 +1,7 @@
 """
 Modelo base con campos comunes para auditoría
 """
-from datetime import datetime
+from datetime import datetime, UTC
 from app.config.database import db
 
 
@@ -16,9 +16,9 @@ class BaseModel(db.Model):
     __abstract__ = True
     
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(UTC))
     created_by = db.Column(db.String(100), nullable=True)
-    updated_at = db.Column(db.DateTime, nullable=True, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=True, onupdate=lambda: datetime.now(UTC))
     updated_by = db.Column(db.String(100), nullable=True)
     deleted_at = db.Column(db.DateTime, nullable=True)
     deleted_by = db.Column(db.String(100), nullable=True)
@@ -27,7 +27,7 @@ class BaseModel(db.Model):
     def soft_delete(self, user=None):
         """Marca el registro como eliminado (soft delete)"""
         self.is_deleted = True
-        self.deleted_at = datetime.utcnow()
+        self.deleted_at = datetime.now(UTC)
         self.deleted_by = user
     
     def restore(self):
