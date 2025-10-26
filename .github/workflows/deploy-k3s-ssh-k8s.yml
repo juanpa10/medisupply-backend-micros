@@ -80,7 +80,8 @@ jobs:
               SLEEP=5
               echo "Waiting for k3s kubectl to be ready (up to $((ATTEMPTS*SLEEP))s)"
               for i in $(seq 1 $ATTEMPTS); do
-                if sudo k3s kubectl version --short >/dev/null 2>&1; then
+                # use a short timeout wrapper so the command can't hang the SSH action
+                if timeout 5s sudo k3s kubectl version --short >/dev/null 2>&1; then
                   echo "k3s kubectl is available"
                   return 0
                 fi
