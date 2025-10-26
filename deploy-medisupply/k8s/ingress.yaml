@@ -41,6 +41,16 @@ spec:
   stripPrefix:
     prefixes: ["/managers"]
 ---
+# --- Middleware: quita el prefijo /video ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-video
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/video"]
+---
 # --- IngressRoute (entryPoint "web" = :80) ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -84,3 +94,10 @@ spec:
       services:
         - name: managers-service      # EXISTE
           port: 9005
+    - kind: Rule
+      match: PathPrefix(`/video`)
+      middlewares:
+        - name: strip-video
+      services:
+        - name: video-api      # EXISTE
+          port: 9020
