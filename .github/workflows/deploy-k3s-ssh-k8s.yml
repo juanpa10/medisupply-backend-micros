@@ -77,12 +77,7 @@ jobs:
             if [ -f "$BASE/scripts/k3s-install.sh" ]; then
               sudo bash "$BASE/scripts/k3s-install.sh"
             fi
-            # after installing k3s, ensure the kube API is responsive before running kubectl
-            if ! wait_for_kube; then
-              echo "kube API is not responsive after k3s install; aborting deploy"
-              exit 1
-            fi
-
+            
             # aplica manifests base si existen
             if [ -d "$BASE/k8s" ]; then
               [ -f "$BASE/k8s/namespace.yaml" ]        && sudo k3s kubectl apply -f "$BASE/k8s/namespace.yaml" || true
