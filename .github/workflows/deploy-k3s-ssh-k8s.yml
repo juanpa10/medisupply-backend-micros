@@ -73,30 +73,6 @@ jobs:
             echo "SSH connected (install/deploy): $(whoami)@$(hostname)"; date; uname -a; id
             BASE="/tmp/medisupply/out/deploy-medisupply"
 
-            # helper: wait for kube-apiserver to respond via k3s kubectl
-            wait_for_kube() {
-              NAMESPACE=medisupply
-              ATTEMPTS=60
-              SLEEP=5
-              echo "Waiting for k3s kubectl to be ready (up to $((ATTEMPTS*SLEEP))s)"
-              for i in $(seq 1 $ATTEMPTS); do
-                # use a short timeout wrapper so the command can't hang the SSH action
-                if timeout 5s sudo k3s kubectl version --short >/dev/null 2>&1; then
-                  echo "k3s kubectl is available"
-                  return 0
-                fi
-                echo "  k3s not ready yet ($i/$ATTEMPTS), sleeping $SLEEP..."
-                sleep $SLEEP
-              done
-              echo "k3s kubectl did not become ready in time; dumping diagnostics"
-              sudo systemctl status k3s || true
-              sudo journalctl -u k3s --no-pager -n 200 || true
-              sudo k3s kubectl get pods -A -o wide || true
-              sudo k3s kubectl get events -A --sort-by=.lastTimestamp || true
-              return 1
-            }
-            BASE="/tmp/medisupply/out/deploy-medisupply"
-
             # instala k3s si subiste el script
             if [ -f "$BASE/scripts/k3s-install.sh" ]; then
               sudo bash "$BASE/scripts/k3s-install.sh"
