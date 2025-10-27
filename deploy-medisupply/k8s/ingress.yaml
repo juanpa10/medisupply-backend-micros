@@ -61,6 +61,16 @@ spec:
   stripPrefix:
     prefixes: ["/orders"]
 ---
+# --- Middleware: quita el prefijo /inventory ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-inventory
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/inventory"]
+---
 # --- IngressRoute (entryPoint "web" = :80) ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -118,3 +128,10 @@ spec:
       services:
         - name: orders-service      # EXISTE
           port: 9006
+    - kind: Rule
+      match: PathPrefix(`/inventory`)
+      middlewares:
+        - name: strip-inventory
+      services:
+        - name: inventory-service      # EXISTE
+          port: 5003

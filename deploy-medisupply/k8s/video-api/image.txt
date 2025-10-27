@@ -1,1 +1,1 @@
-video-service
+video-api
