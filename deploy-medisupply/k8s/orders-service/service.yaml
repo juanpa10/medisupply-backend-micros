@@ -4,9 +4,6 @@ metadata:
   name: orders-service
   namespace: medisupply
 spec:
-  selector:
-    app: orders-service
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 9006
+  selector: { app: orders-service }
+  ports: [ { port: 9006, targetPort: 9006 } ]
+  type: ClusterIP
