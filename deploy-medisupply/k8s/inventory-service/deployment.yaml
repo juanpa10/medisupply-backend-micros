@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: video-api
+  name: inventory-service
   namespace: medisupply
-  labels: { app: video-api }
+  labels: { app: inventory-service }
 spec:
   replicas: 1
-  selector: { matchLabels: { app: video-api } }
+  selector: { matchLabels: { app: inventory-service } }
   template:
-    metadata: { labels: { app: video-api } }
+    metadata: { labels: { app: inventory-service } }
     spec:
       imagePullSecrets: [ { name: ecr-cred } ]
       containers:
-        - name: video
+        - name: inventory
           image: REPLACED_BY_PIPELINE
           imagePullPolicy: Always
           ports: [ { containerPort: 9020 } ]
@@ -32,10 +32,10 @@ spec:
           envFrom:
             - configMapRef: { name: medisupply-config }
           readinessProbe:
-            httpGet: { path: /health, port: 9020 }
+            httpGet: { path: /health, port: 5003 }
             initialDelaySeconds: 5
           livenessProbe:
-            httpGet: { path: /health, port: 9020 }
+            httpGet: { path: /health, port: 5003 }
             initialDelaySeconds: 15
           resources:
             requests: { cpu: "100m", memory: "128Mi" }
