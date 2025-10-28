@@ -5,5 +5,5 @@ metadata:
   namespace: medisupply
 spec:
   selector: { app: inventory-service }
-  ports: [ { port: 5003, targetPort: 5003 } ]
+  ports: [ { port: 5003, targetPort: 9008 } ]
   type: ClusterIP

@@ -12,7 +12,7 @@ if __name__ == '__main__':
     os.makedirs('logs', exist_ok=True)
     
     # Obtener puerto del entorno
-    port = int(os.environ.get('PORT', 5003))
+    port = int(os.environ.get('PORT', 9008))
     
     # Ejecutar aplicación
     app.run(
