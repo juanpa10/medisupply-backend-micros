@@ -29,6 +29,10 @@ spec:
               valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
             - name: DATABASE_URL
               value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            - name: JWT_ALGORITHM
+              value: "HS256"
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service:9001"
             - name: PORT
               value: "9008"
           envFrom:
