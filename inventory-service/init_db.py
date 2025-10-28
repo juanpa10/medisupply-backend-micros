@@ -19,6 +19,7 @@ sys.path.insert(0, str(root_dir))
 
 from app import create_app
 from app.config.database import db
+from sqlalchemy import text
 from app.modules.inventory.models import InventoryItem, InventoryMovement
 from app.modules.inventory.product_model import Product
 from app.shared.enums import InventoryStatus, MovementType
@@ -26,16 +27,80 @@ from app.shared.enums import InventoryStatus, MovementType
 
 def drop_all_tables():
     """Elimina todas las tablas de la base de datos"""
-    print("🗑️  Eliminando tablas existentes...")
-    db.drop_all()
-    print("✅ Tablas eliminadas")
+    print("🗑️  Eliminando tablas existentes (solo tablas manejadas por el seeder)...")
+    # Avoid calling db.drop_all() because SQLAlchemy metadata includes FK
+    # relationships to tables that may not exist in some deployments (eg
+    # 'proveedores'). Use raw DROP TABLE IF EXISTS for the specific tables
+    # we manage here so we don't trigger NoReferencedTableError.
+    # Only drop inventory-specific tables. Keep `products` table to avoid
+    # removing real product data in environments where products-service
+    # is authoritative. This makes the seeder safer / idempotent.
+    sql = '''
+    DROP TABLE IF EXISTS inventory_movements CASCADE;
+    DROP TABLE IF EXISTS inventory_items CASCADE;
+    '''
+    db.session.execute(text(sql))
+    db.session.commit()
+    print("✅ Tablas (específicas) eliminadas")
 
 
 def create_all_tables():
     """Crea todas las tablas definidas en los modelos"""
-    print("📦 Creando tablas...")
-    db.create_all()
-    print("✅ Tablas creadas")
+    print("📦 Creando tablas necesarias (inventory_items, inventory_movements)...")
+    # Create the inventory tables using raw SQL so we don't rely on ORM
+    # metadata that includes external FK tables.
+    create_inventory_items = '''
+    CREATE TABLE IF NOT EXISTS inventory_items (
+        id SERIAL PRIMARY KEY,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+        created_by VARCHAR(100),
+        updated_at TIMESTAMP WITHOUT TIME ZONE,
+        updated_by VARCHAR(100),
+        deleted_at TIMESTAMP WITHOUT TIME ZONE,
+        deleted_by VARCHAR(100),
+        is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        product_id INTEGER NOT NULL,
+        pasillo VARCHAR(20),
+        estanteria VARCHAR(20),
+        nivel VARCHAR(20),
+        cantidad NUMERIC(10,2) NOT NULL DEFAULT 0,
+        status VARCHAR(20) NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_location ON inventory_items (pasillo, estanteria, nivel);
+    CREATE INDEX IF NOT EXISTS idx_product_id ON inventory_items (product_id);
+    '''
+
+    create_inventory_movements = '''
+    CREATE TABLE IF NOT EXISTS inventory_movements (
+        id SERIAL PRIMARY KEY,
+        created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+        created_by VARCHAR(100),
+        updated_at TIMESTAMP WITHOUT TIME ZONE,
+        updated_by VARCHAR(100),
+        deleted_at TIMESTAMP WITHOUT TIME ZONE,
+        deleted_by VARCHAR(100),
+        is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        inventory_item_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        tipo VARCHAR(30) NOT NULL,
+        cantidad NUMERIC(10,2) NOT NULL,
+        cantidad_anterior NUMERIC(10,2),
+        cantidad_nueva NUMERIC(10,2),
+        motivo VARCHAR(200),
+        documento_referencia VARCHAR(100),
+        usuario_id INTEGER,
+        usuario_nombre VARCHAR(200),
+        fecha_movimiento TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_product_movement ON inventory_movements (product_id, fecha_movimiento);
+    CREATE INDEX IF NOT EXISTS idx_item_movement ON inventory_movements (inventory_item_id, fecha_movimiento);
+    CREATE INDEX IF NOT EXISTS idx_tipo_fecha ON inventory_movements (tipo, fecha_movimiento);
+    '''
+
+    db.session.execute(text(create_inventory_items))
+    db.session.execute(text(create_inventory_movements))
+    db.session.commit()
+    print("✅ Tablas de inventario creadas (si no existían)")
 
 
 def create_sample_products():
@@ -46,145 +111,120 @@ def create_sample_products():
     Aquí los creamos solo para propósitos de testing y demostración.
     Los campos categoria_id, unidad_medida_id y proveedor_id son Foreign Keys.
     """
-    print("🏷️  Creando productos de muestra...")
-    
-    products = [
-        Product(
-            nombre="Paracetamol 500mg",
-            codigo="MED-001",
-            referencia="REF-PARA-500",
-            descripcion="Analgésico y antipirético",
-            categoria_id=1,  # Medicamentos
-            unidad_medida_id=1,  # tableta
-            proveedor_id=1,  # Farmacéutica XYZ
-            precio_compra=0.50,
-            precio_venta=1.20,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Ibuprofeno 400mg",
-            codigo="MED-002",
-            referencia="REF-IBU-400",
-            descripcion="Antiinflamatorio no esteroideo",
-            categoria_id=1,  # Medicamentos
-            unidad_medida_id=1,  # tableta
-            proveedor_id=2,  # Farmacéutica ABC
-            precio_compra=0.60,
-            precio_venta=1.50,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Amoxicilina 500mg",
-            codigo="MED-003",
-            referencia="REF-AMO-500",
-            descripcion="Antibiótico de amplio espectro",
-            categoria_id=2,  # Antibióticos
-            unidad_medida_id=2,  # cápsula
-            proveedor_id=3,  # Farmacéutica DEF
-            precio_compra=0.80,
-            precio_venta=2.00,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Omeprazol 20mg",
-            codigo="MED-004",
-            referencia="REF-OME-20",
-            descripcion="Inhibidor de la bomba de protones",
-            categoria_id=1,  # Medicamentos
-            unidad_medida_id=2,  # cápsula
-            proveedor_id=4,  # Farmacéutica GHI
-            precio_compra=0.70,
-            precio_venta=1.80,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Losartán 50mg",
-            codigo="MED-005",
-            referencia="REF-LOS-50",
-            descripcion="Antihipertensivo",
-            categoria_id=3,  # Cardiovascular
-            unidad_medida_id=1,  # tableta
-            proveedor_id=5,  # Farmacéutica JKL
-            precio_compra=0.90,
-            precio_venta=2.20,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Metformina 850mg",
-            codigo="MED-006",
-            referencia="REF-MET-850",
-            descripcion="Antidiabético oral",
-            categoria_id=4,  # Endocrinología
-            unidad_medida_id=1,  # tableta
-            proveedor_id=6,  # Farmacéutica MNO
-            precio_compra=0.40,
-            precio_venta=1.00,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Simvastatina 20mg",
-            codigo="MED-007",
-            referencia="REF-SIM-20",
-            descripcion="Hipolipemiante",
-            categoria_id=3,  # Cardiovascular
-            unidad_medida_id=1,  # tableta
-            proveedor_id=7,  # Farmacéutica PQR
-            precio_compra=0.75,
-            precio_venta=1.90,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Enalapril 10mg",
-            codigo="MED-008",
-            referencia="REF-ENA-10",
-            descripcion="Antihipertensivo IECA",
-            categoria_id=3,  # Cardiovascular
-            unidad_medida_id=1,  # tableta
-            proveedor_id=8,  # Farmacéutica STU
-            precio_compra=0.55,
-            precio_venta=1.40,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Aspirina 100mg",
-            codigo="MED-009",
-            referencia="REF-ASP-100",
-            descripcion="Antiagregante plaquetario",
-            categoria_id=3,  # Cardiovascular
-            unidad_medida_id=1,  # tableta
-            proveedor_id=9,  # Farmacéutica VWX
-            precio_compra=0.30,
-            precio_venta=0.80,
-            status="active",
-            is_deleted=False
-        ),
-        Product(
-            nombre="Cetirizina 10mg",
-            codigo="MED-010",
-            referencia="REF-CET-10",
-            descripcion="Antihistamínico",
-            categoria_id=5,  # Alergias
-            unidad_medida_id=1,  # tableta
-            proveedor_id=10,  # Farmacéutica YZA
-            precio_compra=0.45,
-            precio_venta=1.10,
-            status="active",
-            is_deleted=False
-        ),
-    ]
-    
-    db.session.bulk_save_objects(products)
+    print("🏷️  Creando productos de muestra (tabla simple sin FKs)...")
+
+    # Some deployments do not include the referenced FK tables (categorias,
+    # unidades_medida, proveedores). To keep init_db safe for local dev we
+    # create a simple products table (if it doesn't exist) with the common
+    # searchable columns (both English and Spanish names) and insert sample
+    # rows via raw SQL. This avoids ORM FK constraints issues.
+    create_table_sql = '''
+    CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(200),
+        nombre VARCHAR(200),
+        code VARCHAR(50),
+        codigo VARCHAR(50),
+        reference VARCHAR(100),
+        referencia VARCHAR(100),
+        description TEXT,
+        descripcion TEXT,
+        unit_price NUMERIC(10,2),
+        precio_venta NUMERIC(10,2),
+        status VARCHAR(20),
+        is_deleted BOOLEAN DEFAULT FALSE
+    );
+    '''
+    db.session.execute(text(create_table_sql))
     db.session.commit()
-    
-    print(f"✅ Creados {len(products)} productos")
+
+    sample_products = [
+        {
+            'name': 'Paracetamol 500mg', 'nombre': 'Paracetamol 500mg',
+            'code': 'MED-001', 'codigo': 'MED-001', 'reference': 'REF-PARA-500', 'referencia': 'REF-PARA-500',
+            'description': 'Analgésico y antipirético', 'descripcion': 'Analgésico y antipirético',
+            'unit_price': 1.20, 'precio_venta': 1.20, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Ibuprofeno 400mg', 'nombre': 'Ibuprofeno 400mg',
+            'code': 'MED-002', 'codigo': 'MED-002', 'reference': 'REF-IBU-400', 'referencia': 'REF-IBU-400',
+            'description': 'Antiinflamatorio no esteroideo', 'descripcion': 'Antiinflamatorio no esteroideo',
+            'unit_price': 1.50, 'precio_venta': 1.50, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Amoxicilina 500mg', 'nombre': 'Amoxicilina 500mg',
+            'code': 'MED-003', 'codigo': 'MED-003', 'reference': 'REF-AMO-500', 'referencia': 'REF-AMO-500',
+            'description': 'Antibiótico de amplio espectro', 'descripcion': 'Antibiótico de amplio espectro',
+            'unit_price': 2.00, 'precio_venta': 2.00, 'status': 'active', 'is_deleted': False
+        }
+    ,
+        {
+            'name': 'Omeprazol 20mg', 'nombre': 'Omeprazol 20mg',
+            'code': 'MED-004', 'codigo': 'MED-004', 'reference': 'REF-OME-20', 'referencia': 'REF-OME-20',
+            'description': 'Inhibidor de la bomba de protones', 'descripcion': 'Inhibidor de la bomba de protones',
+            'unit_price': 1.80, 'precio_venta': 1.80, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Losartán 50mg', 'nombre': 'Losartán 50mg',
+            'code': 'MED-005', 'codigo': 'MED-005', 'reference': 'REF-LOS-50', 'referencia': 'REF-LOS-50',
+            'description': 'Antihipertensivo', 'descripcion': 'Antihipertensivo',
+            'unit_price': 2.20, 'precio_venta': 2.20, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Metformina 850mg', 'nombre': 'Metformina 850mg',
+            'code': 'MED-006', 'codigo': 'MED-006', 'reference': 'REF-MET-850', 'referencia': 'REF-MET-850',
+            'description': 'Antidiabético oral', 'descripcion': 'Antidiabético oral',
+            'unit_price': 1.00, 'precio_venta': 1.00, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Simvastatina 20mg', 'nombre': 'Simvastatina 20mg',
+            'code': 'MED-007', 'codigo': 'MED-007', 'reference': 'REF-SIM-20', 'referencia': 'REF-SIM-20',
+            'description': 'Hipolipemiante', 'descripcion': 'Hipolipemiante',
+            'unit_price': 1.90, 'precio_venta': 1.90, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Aspirina 100mg', 'nombre': 'Aspirina 100mg',
+            'code': 'MED-008', 'codigo': 'MED-008', 'reference': 'REF-ASP-100', 'referencia': 'REF-ASP-100',
+            'description': 'Antiagregante plaquetario', 'descripcion': 'Antiagregante plaquetario',
+            'unit_price': 0.80, 'precio_venta': 0.80, 'status': 'active', 'is_deleted': False
+        },
+        {
+            'name': 'Cetirizina 10mg', 'nombre': 'Cetirizina 10mg',
+            'code': 'MED-009', 'codigo': 'MED-009', 'reference': 'REF-CET-10', 'referencia': 'REF-CET-10',
+            'description': 'Antihistamínico', 'descripcion': 'Antihistamínico',
+            'unit_price': 1.10, 'precio_venta': 1.10, 'status': 'active', 'is_deleted': False
+        }
+    ]
+
+    insert_sql = '''
+    INSERT INTO products (name, nombre, code, codigo, reference, referencia, description, descripcion, unit_price, precio_venta, status, is_deleted)
+    VALUES (:name, :nombre, :code, :codigo, :reference, :referencia, :description, :descripcion, :unit_price, :precio_venta, :status, :is_deleted)
+    RETURNING id;
+    '''
+
+    created = 0
+    for p in sample_products:
+        # Check if product already exists (by code / codigo) to avoid duplicates
+        exists_sql = "SELECT count(1) AS cnt FROM products WHERE codigo = :codigo OR code = :code"
+        res = db.session.execute(text(exists_sql), {'codigo': p.get('codigo'), 'code': p.get('code')})
+        cnt = 0
+        try:
+            cnt = res.scalar() or 0
+        except Exception:
+            # If the products table has a different schema, fallback to attempting an insert
+            cnt = 0
+
+        if cnt == 0:
+            try:
+                r = db.session.execute(text(insert_sql), p)
+                created += 1
+            except Exception:
+                import traceback
+                print('⚠️  Failed to insert sample product:')
+                traceback.print_exc()
+    db.session.commit()
+
+    print(f"✅ Creados {created} productos (tabla simple)")
 
 
 def create_sample_inventory_items():
@@ -255,7 +295,7 @@ def create_sample_inventory_items():
             status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
-            product_id=8,  # Enalapril 10mg
+            product_id=8,  # Aspirina 100mg
             pasillo="C",
             estanteria="02",
             nivel="2",
@@ -263,7 +303,7 @@ def create_sample_inventory_items():
             status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
-            product_id=9,  # Aspirina 100mg
+            product_id=9,  # Cetirizina 10mg
             pasillo="C",
             estanteria="03",
             nivel="1",
@@ -271,7 +311,7 @@ def create_sample_inventory_items():
             status=InventoryStatus.AVAILABLE.value
         ),
         InventoryItem(
-            product_id=10,  # Cetirizina 10mg
+            product_id=9,  # Cetirizina 10mg
             pasillo="D",
             estanteria="01",
             nivel="1",
@@ -388,10 +428,12 @@ def init_db():
             create_sample_inventory_items()
             create_sample_movements()
             
-            # Estadísticas
-            total_products = Product.query.count()
-            total_items = InventoryItem.query.count()
-            total_movements = InventoryMovement.query.count()
+            # Estadísticas: usar SQL directo para evitar columnas faltantes en la
+            # tabla `products` cuando el ORM Product tiene FKs/columnas que no
+            # existen en esta tabla simple creada por el seeder.
+            total_products = int(db.session.execute(text('SELECT count(*) FROM products')).scalar() or 0)
+            total_items = int(db.session.execute(text('SELECT count(*) FROM inventory_items')).scalar() or 0)
+            total_movements = int(db.session.execute(text('SELECT count(*) FROM inventory_movements')).scalar() or 0)
             
             print("\n" + "="*60)
             print("✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE")

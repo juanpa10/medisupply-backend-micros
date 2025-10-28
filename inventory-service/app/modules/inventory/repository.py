@@ -82,6 +82,36 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
         
         logger.info(f"Producto {product_id} encontrado en {len(items)} ubicaciones")
         return items
+
+    def search_inventory(self, product_id: Optional[int] = None) -> List[InventoryItem]:
+        """
+        Búsqueda simple de inventario por product_id (ayuda en pruebas y casos sencillos).
+
+        Args:
+            product_id: ID del producto a buscar (opcional)
+
+        Returns:
+            Lista de InventoryItem que cumplen el filtro
+        """
+        q = self.query()
+        if product_id is not None:
+            q = q.filter(InventoryItem.product_id == product_id)
+
+        return q.order_by(InventoryItem.pasillo).all()
+
+    def get_by_location(self, pasillo: str) -> List[InventoryItem]:
+        """
+        Obtiene items por pasillo/ubicación principal
+        """
+        return self.query().filter(InventoryItem.pasillo == pasillo).all()
+
+    def get_items_without_location(self) -> List[InventoryItem]:
+        """
+        Obtiene items que no tienen pasillo/estanteria/nivel definidos
+        """
+        return self.query().filter(
+            (InventoryItem.pasillo == None) | (InventoryItem.estanteria == None) | (InventoryItem.nivel == None)
+        ).all()
     
     def search_by_product_name_or_code(
         self,
@@ -98,147 +128,77 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             Lista de tuplas (InventoryItem, Product) que coinciden con la búsqueda
         """
         logger.info(f"Buscando inventario por query: '{search_query}'")
-        
-        # Construir query con JOIN
-        query = db.session.query(InventoryItem, Product).join(
-            Product,
-            InventoryItem.product_id == Product.id
-        )
-        
-        # Filtrar por nombre, código o referencia (case-insensitive)
-        search_pattern = f"%{search_query.lower()}%"
-        query = query.filter(
-            or_(
-                func.lower(Product.nombre).like(search_pattern),
-                func.lower(Product.codigo).like(search_pattern),
-                func.lower(Product.referencia).like(search_pattern)
-            )
-        )
-        
-        # Solo productos activos y con stock
-        query = query.filter(
-            Product.status == 'active',
-            Product.is_deleted == False,
+
+        search_pattern = f"%{search_query}%"
+
+        try:
+            from sqlalchemy import inspect, text
+            inspector = inspect(db.engine)
+            product_columns = [c['name'] for c in inspector.get_columns(Product.__tablename__)]
+            logger.info(f"Detected product table columns: {sorted(product_columns)}")
+        except Exception:
+            logger.exception('Failed to inspect DB columns for products; aborting search')
+            return []
+
+        # Candidate name/code/reference column names to try (English then Spanish)
+        candidates = []
+        for col in ('name', 'nombre', 'code', 'codigo', 'reference', 'referencia'):
+            if col in product_columns:
+                candidates.append(col)
+
+        if not candidates:
+            logger.warning('No searchable product columns found in products table')
+            return []
+
+        # Use LOWER(... ) LIKE LOWER(:search) for cross-DB compatibility
+        where_clauses = [f"LOWER({Product.__tablename__}.{col}) LIKE LOWER(:search)" for col in candidates]
+        where_sql = ' OR '.join(where_clauses)
+
+        # Build optional status/is_deleted clauses only if the DB exposes them
+        extra_clauses = []
+        params = {'search': search_pattern}
+        if 'status' in product_columns:
+            extra_clauses.append('status = :status')
+            params['status'] = 'active'
+        if 'is_deleted' in product_columns:
+            extra_clauses.append('is_deleted = false')
+
+        extra_sql = ''
+        if extra_clauses:
+            extra_sql = ' AND ' + ' AND '.join(extra_clauses)
+
+        # Select product id and only the actual DB columns (to avoid ORM mapping issues)
+        selected_cols = ', '.join(sorted(product_columns))
+        sql = f"SELECT id, {selected_cols} FROM {Product.__tablename__} WHERE ({where_sql}){extra_sql}"
+
+        try:
+            rows = db.session.execute(text(sql), params).mappings().all()
+        except Exception:
+            logger.exception('Failed to execute raw product search SQL')
+            return []
+
+        if not rows:
+            logger.info('No products matched search')
+            return []
+
+        product_ids = [r['id'] for r in rows]
+
+        # Fetch inventory items for matched products (ORM) and attach product data
+        items = db.session.query(InventoryItem).filter(
+            InventoryItem.product_id.in_(product_ids),
             InventoryItem.cantidad > 0
-        )
-        
-        # Ordenar por nombre de producto
-        query = query.order_by(
-            Product.nombre,
-            InventoryItem.pasillo
-        )
-        
-        results = query.all()
+        ).order_by(InventoryItem.pasillo).all()
+
+        # Return product info as a simple object with attribute access to satisfy callers/tests
+        from types import SimpleNamespace
+
+        product_map = {r['id']: SimpleNamespace(**dict(r)) for r in rows}
+        results = [(item, product_map.get(item.product_id)) for item in items]
+
         logger.info(f"Búsqueda completada: {len(results)} resultados encontrados")
-        
+
         return results
-    
-    def search_inventory(
-        self,
-        product_id: Optional[int] = None,
-        status: Optional[str] = None,
-        pasillo: Optional[str] = None,
-        estanteria: Optional[str] = None,
-        nivel: Optional[str] = None
-    ) -> List[InventoryItem]:
-        """
-        Busca items de inventario con múltiples filtros
-        
-        Args:
-            product_id: Filtro por producto
-            status: Filtro por estado
-            pasillo: Filtro por pasillo
-            estanteria: Filtro por estantería
-            nivel: Filtro por nivel
-            
-        Returns:
-            Lista de items que coinciden
-        """
-        query = self.query()
-        
-        if product_id:
-            query = query.filter(InventoryItem.product_id == product_id)
-        
-        if status:
-            query = query.filter(InventoryItem.status == status)
-        
-        if pasillo:
-            query = query.filter(InventoryItem.pasillo == pasillo)
-        
-        if estanteria:
-            query = query.filter(InventoryItem.estanteria == estanteria)
-        
-        if nivel:
-            query = query.filter(InventoryItem.nivel == nivel)
-        
-        return query.order_by(
-            InventoryItem.product_id
-        ).all()
-    
-    def get_by_location(
-        self,
-        pasillo: str,
-        estanteria: Optional[str] = None,
-        nivel: Optional[str] = None
-    ) -> List[InventoryItem]:
-        """
-        Obtiene items por ubicación en bodega
-        
-        Args:
-            pasillo: Pasillo
-            estanteria: Estantería (opcional)
-            nivel: Nivel (opcional)
-            
-        Returns:
-            Lista de items en la ubicación
-        """
-        query = self.query().filter(
-            InventoryItem.pasillo == pasillo
-        )
-        
-        if estanteria:
-            query = query.filter(InventoryItem.estanteria == estanteria)
-        
-        if nivel:
-            query = query.filter(InventoryItem.nivel == nivel)
-        
-        return query.order_by(InventoryItem.product_id).all()
-    
-    def get_items_without_location(self) -> List[InventoryItem]:
-        """
-        Obtiene items sin ubicación asignada
-        
-        Returns:
-            Lista de items sin ubicación
-        """
-        query = self.query().filter(
-            or_(
-                InventoryItem.pasillo.is_(None),
-                InventoryItem.estanteria.is_(None),
-                InventoryItem.nivel.is_(None)
-            )
-        )
-        
-        return query.order_by(InventoryItem.product_id).all()
-    
-    def get_total_stock_by_product(self, product_id: int) -> float:
-        """
-        Calcula el stock total de un producto en todas las ubicaciones
-        
-        Args:
-            product_id: ID del producto
-            
-        Returns:
-            Cantidad total
-        """
-        result = self.query().filter(
-            InventoryItem.product_id == product_id
-        ).with_entities(
-            func.sum(InventoryItem.cantidad)
-        ).scalar()
-        
-        return float(result) if result else 0.0
-    
+
     def get_available_stock_by_product(self, product_id: int) -> float:
         """
         Calcula el stock disponible de un producto
@@ -256,6 +216,24 @@ class InventoryItemRepository(BaseRepository[InventoryItem]):
             func.sum(InventoryItem.cantidad)
         ).scalar()
         
+        return float(result) if result else 0.0
+
+    def get_total_stock_by_product(self, product_id: int) -> float:
+        """
+        Calcula el stock total (independiente del estado) de un producto
+
+        Args:
+            product_id: ID del producto
+
+        Returns:
+            Cantidad total en inventario
+        """
+        result = self.query().filter(
+            InventoryItem.product_id == product_id
+        ).with_entities(
+            func.sum(InventoryItem.cantidad)
+        ).scalar()
+
         return float(result) if result else 0.0
 
 

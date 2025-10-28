@@ -87,7 +87,9 @@ class InventoryController:
         except BusinessError as e:
             return error_response(message=str(e), status_code=400)
         except Exception as e:
-            logger.error(f"Error en búsqueda por producto: {str(e)}")
+            # Log full traceback to assist debugging (stack trace will show where the
+            # Clause truth-value or SQL construction error originates).
+            logger.exception("Error en búsqueda por producto")
             return error_response(
                 message='Error al buscar productos en inventario',
                 status_code=500

@@ -81,6 +81,36 @@ python run.py
 
 El servicio estará disponible en `http://localhost:5003`
 
+## 🧾 Productos de ejemplo (Seeder)
+
+El `inventory-service` incluye un seeder de desarrollo que puede crear una tabla
+`products` simple y cargar productos de ejemplo cuando se ejecuta el script de
+inicialización (`init_db.py`) o si la variable de entorno `INIT_DB=true` está
+establecida al arrancar el contenedor.
+
+Esta funcionalidad está pensada para entornos de desarrollo y demostración. Si
+despliegas en la nube, controla la ejecución del seeder (no dejar `INIT_DB=true`
+en producción salvo que lo hagas intencionalmente).
+
+Productos que el seeder puede crear (codigos identificadores):
+
+1. Paracetamol 500mg — MED-001
+2. Ibuprofeno 400mg — MED-002
+3. Amoxicilina 500mg — MED-003
+4. Omeprazol 20mg — MED-004
+5. Losartán 50mg — MED-005
+6. Metformina 850mg — MED-006
+7. Simvastatina 20mg — MED-007
+8. Aspirina 100mg — MED-008
+9. Cetirizina 10mg — MED-009
+
+Notas:
+- El seeder evita insertar duplicados comprobando `codigo`/`code` antes de
+  insertar.
+- Para producción se recomienda ejecutar el seeder como un job controlado o
+  mediante un endpoint/admin-tool seguro, no automáticamente en el entrypoint.
+
+
 ## 🔍 API: Búsqueda de Productos (HU-22)
 
 ### Endpoint Principal

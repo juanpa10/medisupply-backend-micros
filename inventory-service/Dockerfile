@@ -29,17 +29,18 @@ RUN mkdir -p logs uploads
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     FLASK_APP=run.py \
-    PORT=5003
+    PORT=9008
 
 # Expose port
-EXPOSE 5003
+# Expose the container port (aligned with host mapping)
+EXPOSE 9008
 
-# Make entrypoint executable
-RUN chmod +x entrypoint.sh
+# Normalize line endings and make entrypoint executable (fix CRLF on Windows hosts)
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:5003/health', timeout=5)" || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:9008/health', timeout=5)" || exit 1
 
 # Run entrypoint
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]

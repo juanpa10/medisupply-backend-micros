@@ -228,6 +228,32 @@ services:
       timeout: 5s
       retries: 5
 
+  inventory-service:
+    build:
+      context: ./inventory-service
+    image: pyms-inventory-service:local
+    ports:
+      - "9008:9008"
+    environment:
+      JWT_SECRET: "supersecret"
+      JWT_ALGORITHM: "HS256"
+      AUTH_SERVICE_URL: "http://auth-service:9001"
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      FLASK_APP: run.py
+      PYTHONUNBUFFERED: "1"
+      PORT: "9008"
+      INIT_DB: 'true'
+    depends_on:
+      auth-service:
+        condition: service_started
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:9008/health', timeout=3); print('ok')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   medisupply_pg_data:
   video_uploads:

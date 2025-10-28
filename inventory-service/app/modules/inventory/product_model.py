@@ -7,6 +7,7 @@ El inventory-service NO debe modificar esta tabla, solo consultarla.
 La gestión de productos (CRUD) es responsabilidad del products-service.
 """
 from sqlalchemy import Column, Integer, String, Numeric, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import synonym
 from app.config.database import db
 
 
@@ -27,10 +28,17 @@ class Product(db.Model):
     id = Column(Integer, primary_key=True)
     
     # Información del producto (READ-ONLY)
-    nombre = Column(String(200), nullable=False, index=True)
-    codigo = Column(String(50), unique=True, nullable=False, index=True)
-    referencia = Column(String(100), index=True)
-    descripcion = Column(Text)
+    # Many deployments use Spanish column names. Map to the Spanish DB column
+    # names by default and expose English attribute names as aliases where useful.
+    nombre = Column('nombre', String(200), nullable=False, index=True)
+    # alias 'name' to the Spanish column so code that expects Product.name still works
+    # use SQLAlchemy synonym to avoid duplicate Column mapping warnings
+    name = synonym('nombre')
+
+    # Map Spanish DB columns (codigo, referencia, descripcion)
+    codigo = Column('codigo', String(50), unique=True, nullable=False, index=True)
+    referencia = Column('referencia', String(100), index=True)
+    descripcion = Column('descripcion', Text)
     
     # Categorización (Foreign Keys)
     categoria_id = Column(Integer, ForeignKey('categorias.id'), index=True)
@@ -39,9 +47,9 @@ class Product(db.Model):
     # Información del proveedor (Foreign Key)
     proveedor_id = Column(Integer, ForeignKey('proveedores.id'), index=True)
     
-    # Precios base
-    precio_compra = Column(Numeric(10, 2))
-    precio_venta = Column(Numeric(10, 2))
+    # Precios base (Spanish column names)
+    precio_compra = Column('precio_compra', Numeric(10, 2))
+    precio_venta = Column('precio_venta', Numeric(10, 2))
     
     # Estado
     status = Column(String(20), default='active')

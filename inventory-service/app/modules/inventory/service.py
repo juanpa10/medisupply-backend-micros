@@ -334,6 +334,22 @@ class InventoryService:
         # Formato simplificado de respuesta
         simplified_results = []
         for inventory_item, product in results:
+            def _pf(*names):
+                """Get product field by trying multiple possible column names.
+
+                Works with both ORM objects and dicts returned by raw SQL.
+                """
+                if isinstance(product, dict):
+                    for n in names:
+                        if n in product and product[n] is not None:
+                            return product[n]
+                    return None
+                else:
+                    for n in names:
+                        if hasattr(product, n):
+                            return getattr(product, n)
+                    return None
+
             result = {
                 'id': inventory_item.id,
                 'product_id': inventory_item.product_id,
@@ -346,13 +362,13 @@ class InventoryService:
                 'created_at': inventory_item.created_at.isoformat() if inventory_item.created_at else None,
                 'updated_at': inventory_item.updated_at.isoformat() if inventory_item.updated_at else None,
                 'product_info': {
-                    'nombre': product.nombre,
-                    'codigo': product.codigo,
-                    'referencia': product.referencia,
-                    'descripcion': product.descripcion,
-                    'categoria_id': product.categoria_id,
-                    'unidad_medida_id': product.unidad_medida_id,
-                    'proveedor_id': product.proveedor_id
+                    'nombre': _pf('nombre', 'name'),
+                    'codigo': _pf('codigo', 'code'),
+                    'referencia': _pf('referencia', 'reference'),
+                    'descripcion': _pf('descripcion', 'description'),
+                    'categoria_id': _pf('categoria_id'),
+                    'unidad_medida_id': _pf('unidad_medida_id'),
+                    'proveedor_id': _pf('proveedor_id')
                 }
             }
             simplified_results.append(result)

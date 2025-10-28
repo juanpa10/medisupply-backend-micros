@@ -5,6 +5,7 @@ from flask import Flask
 from flask_cors import CORS
 from app.config.settings import get_config
 from app.config.database import db, migrate
+import os
 from app.core.middleware.error_handler import register_error_handlers
 from app.core.middleware.request_logger import RequestLogger
 from app.core.utils.logger import setup_logger
@@ -42,6 +43,16 @@ def create_app(config_name=None):
         from app.modules.inventory.routes import inventory_bp
         
         app.register_blueprint(inventory_bp)
+
+        # Auto-create tables on startup (similar behaviour to video-api)
+        # Controlled by env var AUTO_CREATE_TABLES (default: true for local/dev)
+        auto_create = os.environ.get('AUTO_CREATE_TABLES', 'true').lower() in ('1', 'true', 'yes')
+        if auto_create:
+            try:
+                db.create_all()
+            except Exception:
+                # If migrations are preferred or an error occurs, skip silently
+                pass
     
     @app.route('/health')
     def health_check():
