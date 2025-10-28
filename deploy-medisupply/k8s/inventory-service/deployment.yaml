@@ -15,7 +15,7 @@ spec:
         - name: inventory
           image: REPLACED_BY_PIPELINE
           imagePullPolicy: Always
-          ports: [ { containerPort: 9020 } ]
+          ports: [ { containerPort: 9008 } ]
           env:
             - name: DB_HOST
               value: "postgres.medisupply.svc.cluster.local"
@@ -29,13 +29,15 @@ spec:
               valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
             - name: DATABASE_URL
               value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            - name: PORT
+              value: "9008"
           envFrom:
             - configMapRef: { name: medisupply-config }
           readinessProbe:
-            httpGet: { path: /health, port: 5003 }
+            httpGet: { path: /health, port: 9008 }
             initialDelaySeconds: 5
           livenessProbe:
-            httpGet: { path: /health, port: 5003 }
+            httpGet: { path: /health, port: 9008 }
             initialDelaySeconds: 15
           resources:
             requests: { cpu: "100m", memory: "128Mi" }
