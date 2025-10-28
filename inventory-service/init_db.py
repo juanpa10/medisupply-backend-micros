@@ -196,32 +196,55 @@ def create_sample_products():
         }
     ]
 
-    insert_sql = '''
-    INSERT INTO products (name, nombre, code, codigo, reference, referencia, description, descripcion, unit_price, precio_venta, status, is_deleted)
-    VALUES (:name, :nombre, :code, :codigo, :reference, :referencia, :description, :descripcion, :unit_price, :precio_venta, :status, :is_deleted)
-    RETURNING id;
-    '''
+    # Discover which columns actually exist in the current `products` table
+    col_q = "SELECT column_name FROM information_schema.columns WHERE table_name = 'products'"
+    cols = [row[0] for row in db.session.execute(text(col_q)).fetchall()]
+
+    # Build a safe INSERT statement using only the columns that exist
+    desired_cols = ['name', 'nombre', 'code', 'codigo', 'reference', 'referencia',
+                    'description', 'descripcion', 'unit_price', 'precio_venta', 'status', 'is_deleted']
+    insert_cols = [c for c in desired_cols if c in cols]
+
+    if insert_cols:
+        insert_sql = f"INSERT INTO products ({', '.join(insert_cols)}) VALUES ({', '.join(':' + c for c in insert_cols)}) RETURNING id;"
+    else:
+        # No writable columns found; skip insertion
+        print('⚠️  No matching product columns found, skipping product inserts')
+        insert_sql = None
 
     created = 0
     for p in sample_products:
-        # Check if product already exists (by code / codigo) to avoid duplicates
-        exists_sql = "SELECT count(1) AS cnt FROM products WHERE codigo = :codigo OR code = :code"
-        res = db.session.execute(text(exists_sql), {'codigo': p.get('codigo'), 'code': p.get('code')})
+        # Build an existence check using only available identifier columns
+        idents = []
+        if 'codigo' in cols:
+            idents.append('codigo = :codigo')
+        if 'code' in cols:
+            idents.append('code = :code')
+
         cnt = 0
-        try:
-            cnt = res.scalar() or 0
-        except Exception:
-            # If the products table has a different schema, fallback to attempting an insert
+        if idents:
+            exists_sql = 'SELECT count(1) AS cnt FROM products WHERE ' + ' OR '.join(idents)
+            try:
+                res = db.session.execute(text(exists_sql), {'codigo': p.get('codigo'), 'code': p.get('code')})
+                cnt = int(res.scalar() or 0)
+            except Exception:
+                # If the existence check fails for any reason, fallback to 0 so insert will be attempted
+                cnt = 0
+        else:
+            # No identifier columns available, assume product doesn't exist and attempt insert
             cnt = 0
 
-        if cnt == 0:
+        if cnt == 0 and insert_sql:
+            # Prepare parameters only for columns that we will insert
+            params = {k: v for k, v in p.items() if k in insert_cols}
             try:
-                r = db.session.execute(text(insert_sql), p)
+                db.session.execute(text(insert_sql), params)
                 created += 1
             except Exception:
                 import traceback
                 print('⚠️  Failed to insert sample product:')
                 traceback.print_exc()
+
     db.session.commit()
 
     print(f"✅ Creados {created} productos (tabla simple)")
