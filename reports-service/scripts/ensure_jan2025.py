@@ -12,6 +12,17 @@ times.
 from datetime import date, timedelta
 from app.db import SessionLocal
 from app.domain.models import Sale
+# Ensure DB tables exist in case init_db didn't run or failed in another
+# process. This is idempotent and cheap for the small schema.
+from app.db import engine, Base
+
+
+def ensure_tables():
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception:
+        # if creation fails, we still attempt the idempotent checks below
+        pass
 
 
 def make_jan_rows():
@@ -45,6 +56,8 @@ def make_jan_rows():
 
 
 def ensure_rows():
+    # Make sure the tables exist (safe to call multiple times)
+    ensure_tables()
     sess = SessionLocal()
     rows = make_jan_rows()
     inserted = 0

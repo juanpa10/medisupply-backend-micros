@@ -23,9 +23,9 @@ spec:
           # sys.path[0] becomes the script's directory which prevents sibling
           # packages (like /app/app) from being discovered. Setting PYTHONPATH
           # and running commands from /app avoids ModuleNotFoundError.
-          # Print the resolved engine URL first so CI logs show whether this
-          # image uses Postgres or fell back to sqlite. Then run the init scripts.
-          args: ["cd /app && PYTHONPATH=/app python -c \"from app.db import engine; print('ENGINE_URL=' + str(engine.url))\" && PYTHONPATH=/app python init_db.py && PYTHONPATH=/app python scripts/ensure_jan2025.py"]
+          # Run both init steps inside a single Python process using a heredoc.
+          # This avoids cross-process import/order issues and produces unified logs.
+          args: ["cd /app && PYTHONPATH=/app python - <<'PY'\nfrom app.db import engine\nprint('ENGINE_URL=' + str(engine.url))\nprint('Running init_db...')\nfrom init_db import init_db\ninit_db()\nprint('Running ensure_jan2025...')\nfrom scripts.ensure_jan2025 import ensure_rows\nn = ensure_rows()\nprint('ensure_jan2025 inserted', n)\nPY"]
           env:
             - name: PYTHONPATH
               value: "/app"
