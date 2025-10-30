@@ -1,0 +1,27 @@
+# Flask Framework
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+Flask-CORS==4.0.0
+
+# Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+
+# Validation
+marshmallow==3.20.1
+
+# Authentication
+PyJWT==2.8.0
+requests==2.31.0
+
+# Utilities
+python-dotenv==1.0.0
+Werkzeug==3.0.1
+
+# Production Server
+gunicorn==21.2.0
+
+# Performance monitoring (optional)
+# redis==5.0.1
+# flask-caching==2.1.0

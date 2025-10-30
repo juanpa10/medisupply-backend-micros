@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  namespace: medisupply
+  labels: { app: inventory-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: inventory-service } }
+  template:
+    metadata: { labels: { app: inventory-service } }
+    spec:
+      imagePullSecrets: [ { name: ecr-cred } ]
+      containers:
+        - name: inventory
+          image: REPLACED_BY_PIPELINE
+          imagePullPolicy: Always
+          ports: [ { containerPort: 9008 } ]
+          env:
+            - name: DB_HOST
+              value: "postgres.medisupply.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_DB } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            - name: JWT_ALGORITHM
+              value: "HS256"
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service:9001"
+            - name: PORT
+              value: "9008"
+          envFrom:
+            - configMapRef: { name: medisupply-config }
+          readinessProbe:
+            httpGet: { path: /health, port: 9008 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 9008 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }

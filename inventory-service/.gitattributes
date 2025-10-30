@@ -1,0 +1,6 @@
+# Ensure shell scripts and other scripts keep LF endings on checkout
+*.sh text eol=lf
+*.py text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

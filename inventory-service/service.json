@@ -1,0 +1,49 @@
+{
+    "name": "inventory-service",
+    "version": "1.0.0",
+    "description": "Microservicio de gestión de inventario, stock y localización de productos en bodega",
+    "port": 9008,
+    "containerPort": 9008,
+    "pathPrefix": "/inventory/*",
+    "healthPath": "/health",
+    "cpu": 256,
+    "memory": 512,
+    "desiredCount": 1,
+    "database": "inventory_db",
+    "endpoints": {
+        "health": "/health",
+        "api_base": "/api/v1/inventory",
+        "inventory": "/api/v1/inventory",
+        "search": "/api/v1/inventory/search",
+        "product_location": "/api/v1/inventory/product/{product_id}/location",
+        "adjust_stock": "/api/v1/inventory/{id}/adjust",
+        "reserve_stock": "/api/v1/inventory/{id}/reserve",
+        "release_stock": "/api/v1/inventory/{id}/release",
+        "update_location": "/api/v1/inventory/{id}/location",
+        "low_stock_alerts": "/api/v1/inventory/alerts/low-stock",
+        "expiring_alerts": "/api/v1/inventory/alerts/expiring",
+        "movements": "/api/v1/inventory/movements"
+    },
+    "features": [
+        "Búsqueda de ubicación de productos <1s (HU-22)",
+        "Localización exacta en bodega (pasillo/estantería/nivel)",
+        "Gestión de stock (entradas, salidas, ajustes)",
+        "Reservas de stock para órdenes",
+        "Alertas de stock bajo y productos por vencer",
+        "Historial de movimientos de inventario",
+        "Gestión de lotes y fechas de vencimiento",
+        "Soporte multi-bodega",
+        "Autenticación JWT",
+        "Auditoría completa de movimientos"
+    ],
+    "performance": {
+        "search_timeout": "1.0s",
+        "max_results_per_page": 100,
+        "default_page_size": 20
+    },
+    "integrations": {
+        "products-service": "Referencia productos por product_id",
+        "orders-service": "Reservas de stock",
+        "auth-service": "Autenticación JWT"
+    }
+}

@@ -41,6 +41,36 @@ spec:
   stripPrefix:
     prefixes: ["/managers"]
 ---
+# --- Middleware: quita el prefijo /video ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-video
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/video"]
+---
+# --- Middleware: quita el prefijo /orders ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-orders
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/orders"]
+---
+# --- Middleware: quita el prefijo /inventory ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: strip-inventory
+  namespace: medisupply
+spec:
+  stripPrefix:
+    prefixes: ["/inventory"]
+---
 # --- IngressRoute (entryPoint "web" = :80) ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -84,3 +114,24 @@ spec:
       services:
         - name: managers-service      # EXISTE
           port: 9005
+    - kind: Rule
+      match: PathPrefix(`/video`)
+      middlewares:
+        - name: strip-video
+      services:
+        - name: video-api      # EXISTE
+          port: 9020
+    - kind: Rule
+      match: PathPrefix(`/orders`)
+      middlewares:
+        - name: strip-orders
+      services:
+        - name: orders-service      # EXISTE
+          port: 9006
+    - kind: Rule
+      match: PathPrefix(`/inventory`)
+      middlewares:
+        - name: strip-inventory
+      services:
+        - name: inventory-service      # EXISTE
+          port: 5003

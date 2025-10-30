@@ -1,0 +1,178 @@
+{
+  "info": {
+    "name": "inventory-service - MediSupply",
+    "_postman_id": "inventory-service-collection",
+    "description": "Collection to test inventory-service endpoints (health + search). Includes an Auth login request to obtain a Bearer token from auth-service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:5003",
+      "type": "string"
+    },
+    {
+      "key": "auth_url",
+      "value": "http://localhost:9001",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Authentication helpers (login to obtain JWT)",
+      "item": [
+        {
+          "name": "Login (auth-service)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@medisupply.com\",\n  \"password\": \"Admin#123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{auth_url}}/auth/login",
+              "host": [
+                "{{auth_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save access_token into collection variable 'jwt_token' for subsequent requests",
+                  "try {",
+                  "  var json = pm.response.json();",
+                  "  if (json && json.access_token) {",
+                  "    pm.collectionVariables.set('jwt_token', json.access_token);",
+                  "    pm.test('access_token saved', function() { pm.expect(json.access_token).to.be.a('string'); });",
+                  "  } else {",
+                  "    pm.test('response has access_token', function() { pm.expect(json).to.have.property('access_token'); });",
+                  "  }",
+                  "} catch (e) {",
+                  "  pm.test('response is valid json', function() { throw e; });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "description": "Inventory service endpoints",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status code is 200', function() { pm.response.to.have.status(200); });",
+                  "try {",
+                  "  var json = pm.response.json();",
+                  "  pm.test('body.status is healthy', function() { pm.expect(json.status).to.eql('healthy'); });",
+                  "} catch (e) {",
+                  "  // if response not JSON, fail the test",
+                  "  pm.test('response is valid json', function() { throw e; });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Search Product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/inventory/search-product?q=paracetamol",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "search-product"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "paracetamol"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status code is 200', function() { pm.response.to.have.status(200); });",
+                  "try {",
+                  "  var json = pm.response.json();",
+                  "  pm.test('success flag is true', function() { pm.expect(json.success).to.eql(true); });",
+                  "  pm.test('data is an array', function() { pm.expect(json.data).to.be.an('array'); });",
+                  "} catch (e) {",
+                  "  pm.test('response is valid json', function() { throw e; });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

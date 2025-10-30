@@ -167,24 +167,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  reports-db:
-    image: postgres:16-alpine
-    container_name: reports-db
-    environment:
-      - POSTGRES_DB=reports
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - reports_pg_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d reports"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-
   reports-service:
     build:
       context: ./reports-service
@@ -192,11 +174,13 @@ services:
     ports:
       - "9007:9007"
     environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@reports-db:5432/reports
+      # Use the shared Medisupply DB so reports service stores data in the
+      # same Postgres instance as the other services.
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
       INIT_DB: 'true'
       JWT_SECRET: "supersecret"
     depends_on:
-      reports-db:
+      medisupply-db:
         condition: service_healthy
     healthcheck:
       test:
@@ -234,6 +218,73 @@ services:
       timeout: 5s
       retries: 5
 
+  video-api:
+    build:
+      context: ./video-api
+    image: pyms-video-api:local
+    environment:
+      # Clave para firmar URLs temporales (cámbiala en prod)
+      SECRET_KEY: "supersecret"
+      # Carpeta de almacenamiento (privada en el contenedor)
+      UPLOAD_DIR: /srv/app/data/uploads
+      # Nota: actualmente video-api usa SQLite interno para metadatos.
+      # Si más adelante migras a Postgres, ajustamos el código para usar DATABASE_URL.
+      # DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+    ports:
+      - "9020:9020"   # host:container
+    volumes:
+      - video_uploads:/srv/app/data/uploads
+    depends_on:
+      # No requiere auth-service para arrancar, pero puedes añadirlo si quieres
+      # validar JWT en futuras versiones del servicio.
+      auth-service:
+        condition: service_started
+      # Si decides migrar a Postgres, descomenta esto:
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >
+          python - <<'PY'
+          import urllib.request, sys
+          try:
+              with urllib.request.urlopen('http://localhost:9005/health', timeout=3) as r:
+                  print('ok')
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          PY
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  inventory-service:
+    build:
+      context: ./inventory-service
+    image: pyms-inventory-service:local
+    ports:
+      - "9008:9008"
+    environment:
+      JWT_SECRET: "supersecret"
+      JWT_ALGORITHM: "HS256"
+      AUTH_SERVICE_URL: "http://auth-service:9001"
+      DATABASE_URL: postgresql+psycopg2://app:app@medisupply-db:5432/medisupplydb
+      FLASK_APP: run.py
+      PYTHONUNBUFFERED: "1"
+      PORT: "9008"
+      INIT_DB: 'true'
+    depends_on:
+      auth-service:
+        condition: service_started
+      medisupply-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://localhost:9008/health', timeout=3); print('ok')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   medisupply_pg_data:
-  reports_pg_data:
+  video_uploads:

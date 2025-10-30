@@ -15,6 +15,8 @@ jobs:
   deploy:
     if: ${{ github.event_name == 'repository_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
     runs-on: ubuntu-latest
+    # Give the deploy job more headroom to run long remote commands (installing k3s, waiting jobs/rollouts)
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +39,9 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script_stop: true
           script: |
+            # debug: print early connectivity info and enable shell trace
+            set -x
+            echo "SSH connected (clean dir): $(whoami)@$(hostname)"; date
             sudo rm -rf /tmp/medisupply
             mkdir -p /tmp/medisupply
 
@@ -63,14 +68,16 @@ jobs:
           script_stop: true
           envs: AWS_REGION,AWS_ACCOUNT_ID,ECR_REPO,TAG_PREFIX
           script: |
-            set -e
+            # debug: print early connectivity info and enable shell trace
+            set -x
+            echo "SSH connected (install/deploy): $(whoami)@$(hostname)"; date; uname -a; id
             BASE="/tmp/medisupply/out/deploy-medisupply"
 
             # instala k3s si subiste el script
             if [ -f "$BASE/scripts/k3s-install.sh" ]; then
               sudo bash "$BASE/scripts/k3s-install.sh"
             fi
-
+            
             # aplica manifests base si existen
             if [ -d "$BASE/k8s" ]; then
               [ -f "$BASE/k8s/namespace.yaml" ]        && sudo k3s kubectl apply -f "$BASE/k8s/namespace.yaml" || true
@@ -120,7 +127,24 @@ jobs:
 
               # Actualiza el deployment del front
               sudo k3s kubectl -n medisupply set image deploy/web-portal web-portal="$WEB_IMG" || true
-              sudo k3s kubectl -n medisupply rollout status deploy/web-portal --timeout=180s || true
+              # wait for rollout with longer timeout and a couple of retries to handle transient kube API issues
+              for i in $(seq 1 3); do
+                if sudo k3s kubectl -n medisupply rollout status deploy/web-portal --timeout=600s; then
+                  break
+                fi
+                echo "Web rollout attempt $i failed; gathering debug info"
+                sudo k3s kubectl -n medisupply describe deploy/web-portal || true
+                sudo k3s kubectl -n medisupply get pods -o wide || true
+                # events and previous logs to help diagnose transient failures
+                sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
+                sudo k3s kubectl -n medisupply get pods -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
+                if [ "$i" -lt 3 ]; then
+                  echo "Retrying rollout in 10s..."
+                  sleep 10
+                else
+                  echo "Web rollout failed after 3 attempts"
+                fi
+              done || true
               echo "Front updated to image: $WEB_IMG"
 
               # Salir aquí para no correr el bucle de micros del back
@@ -179,15 +203,37 @@ jobs:
                     sudo k3s kubectl -n medisupply delete job ${d}-init-db --ignore-not-found || true
                     sudo k3s kubectl -n medisupply delete pods -l job-name=${d}-init-db --ignore-not-found || true
                     sudo k3s kubectl -n medisupply apply -f "$TMP_JOB"
-                    # wait for job to succeed (timeout ~300s)
-                    for i in $(seq 1 60); do
+                    # wait for job to succeed (timeout ~600s). Detect failures early and dump debug info.
+                    for i in $(seq 1 120); do
                       succeeded=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "0")
+                      failed=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.failed}' 2>/dev/null || echo "0")
                       if [ "$succeeded" = "1" ]; then
                         echo "   Init job ${d}-init-db succeeded"
                         break
                       fi
-                      echo "   Waiting for init job ${d}-init-db to complete ($i/60)"; sleep 5
+                      if [ "$failed" != "0" ] && [ "$failed" != "" ]; then
+                        echo "   Init job ${d}-init-db reported failures (failed=${failed}), dumping describe/logs"
+                        sudo k3s kubectl -n medisupply describe job ${d}-init-db || true
+                        sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
+                        # also list pods related to the job and dump previous logs and events
+                        sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o wide || true
+                        sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
+                        sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
+                        exit 1
+                      fi
+                      echo "   Waiting for init job ${d}-init-db to complete ($i/120)"; sleep 5
                     done
+                    # if loop finished without success, gather diagnostics
+                    succeeded=$(sudo k3s kubectl -n medisupply get job ${d}-init-db -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "0")
+                    if [ "$succeeded" != "1" ]; then
+                      echo "   Init job ${d}-init-db did not complete in time, dumping describe/logs"
+                      sudo k3s kubectl -n medisupply describe job ${d}-init-db || true
+                      sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
+                      sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o wide || true
+                      sudo k3s kubectl -n medisupply get pods --selector=job-name=${d}-init-db -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
+                      sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
+                      exit 1
+                    fi
                     echo "   Showing logs for job ${d}-init-db (if any):"
                     sudo k3s kubectl -n medisupply logs job/${d}-init-db || true
                     # cleanup temporary job YAML
@@ -197,7 +243,27 @@ jobs:
                   CNAME=$(sudo k3s kubectl -n medisupply get deploy/${DEPLOY_NAME} -o jsonpath='{.spec.template.spec.containers[0].name}')
                   IMG="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:${TAG_PREFIX}${IMG_NAME}-${SHA}"
                   sudo k3s kubectl -n medisupply set image deploy/${DEPLOY_NAME} $CNAME=$IMG
-                  sudo k3s kubectl -n medisupply rollout status deploy/${DEPLOY_NAME} --timeout=180s
+                  # wait for rollout with longer timeout and retries; on final failure dump describe/pods for debugging
+                  for i in $(seq 1 3); do
+                    if sudo k3s kubectl -n medisupply rollout status deploy/${DEPLOY_NAME} --timeout=600s; then
+                      break
+                    fi
+                    echo "Rollout attempt $i for ${DEPLOY_NAME} failed; gathering debug info"
+                    sudo k3s kubectl -n medisupply describe deploy/${DEPLOY_NAME} || true
+                    # try to list pods filtered by common label 'app' then fallback to all pods and grep
+                    sudo k3s kubectl -n medisupply get pods --selector=app=${DEPLOY_NAME} -o wide || sudo k3s kubectl -n medisupply get pods -o wide | grep ${DEPLOY_NAME} || true
+                    # events and previous logs for deployment pods
+                    sudo k3s kubectl -n medisupply get events --sort-by=.lastTimestamp || true
+                    sudo k3s kubectl -n medisupply get pods --selector=app=${DEPLOY_NAME} -o name | xargs -r -n1 -I{} sudo k3s kubectl -n medisupply logs {} --all-containers --previous || true
+                    if [ "$i" -lt 3 ]; then
+                      echo "Retrying rollout for ${DEPLOY_NAME} in 10s..."
+                      sleep 10
+                    else
+                      echo "Rollout for ${DEPLOY_NAME} failed after 3 attempts"
+                      # exit non-zero so CI knows deployment didn't converge
+                      exit 1
+                    fi
+                  done
                 fi
               done
             fi

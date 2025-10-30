@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orders-service
+  name: video-api
   namespace: medisupply
-  labels: { app: orders-service }
+  labels: { app: video-api }
 spec:
   replicas: 1
-  selector: { matchLabels: { app: orders-service } }
+  selector: { matchLabels: { app: video-api } }
   template:
-    metadata: { labels: { app: orders-service } }
+    metadata: { labels: { app: video-api } }
     spec:
       imagePullSecrets: [ { name: ecr-cred } ]
       containers:
-        - name: orders
+        - name: video
           image: REPLACED_BY_PIPELINE
           imagePullPolicy: Always
-          ports: [ { containerPort: 9006 } ]
+          ports: [ { containerPort: 9020 } ]
           env:
             - name: DB_HOST
               value: "postgres.medisupply.svc.cluster.local"
@@ -27,13 +27,15 @@ spec:
               valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
             - name: DB_PASSWORD
               valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
           envFrom:
             - configMapRef: { name: medisupply-config }
           readinessProbe:
-            httpGet: { path: /api/health, port: 9006 }
+            httpGet: { path: /health, port: 9020 }
             initialDelaySeconds: 5
           livenessProbe:
-            httpGet: { path: /api/health, port: 9006 }
+            httpGet: { path: /health, port: 9020 }
             initialDelaySeconds: 15
           resources:
             requests: { cpu: "100m", memory: "128Mi" }
