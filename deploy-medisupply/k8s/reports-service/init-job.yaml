@@ -37,7 +37,13 @@ spec:
               valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
             - name: DB_PASSWORD
               valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
-            - name: DATABASE_URL
-              value: "postgresql+psycopg2://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)"
+            # Do NOT set DATABASE_URL here using a literal with $(...) substitutions.
+            # In some environments that can end up unexpanded and injected as a
+            # literal like "postgresql+psycopg2://$(DB_USER):..." which causes
+            # the app to attempt to use a broken URL (and avoids the fallback
+            # logic that builds DATABASE_URL from DB_* env vars). The app's
+            # `app/db.py` already constructs DATABASE_URL from DB_USER/DB_PASSWORD/
+            # DB_HOST/DB_PORT/DB_NAME when DATABASE_URL is not present — rely on
+            # that to avoid brittle in-manifest string interpolation.
           envFrom:
             - configMapRef: { name: medisupply-config }
