@@ -103,3 +103,11 @@ def init_db(database_url=None):
         except Exception:
             # if anything goes wrong here, we don't want to fail the init
             pass
+
+
+    if __name__ == '__main__':
+        # When invoked as a script (e.g. in the k8s init Job) run the init
+        # routine so tables are created and seeded. Keep messages minimal
+        # so logs are concise in CI.
+        print('Running reports-service init_db...')
+        init_db()
