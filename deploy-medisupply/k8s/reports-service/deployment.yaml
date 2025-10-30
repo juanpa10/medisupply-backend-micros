@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reports-service
+  namespace: medisupply
+  labels: { app: reports-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: reports-service } }
+  template:
+    metadata: { labels: { app: reports-service } }
+    spec:
+      imagePullSecrets: [ { name: ecr-cred } ]
+      containers:
+        - name: reports
+          image: REPLACED_BY_PIPELINE
+          imagePullPolicy: Always
+          ports: [ { containerPort: 9007 } ]
+          env:
+            - name: DB_HOST
+              value: "postgres.medisupply.svc.cluster.local"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_DB } }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD } }
+          envFrom:
+            - configMapRef: { name: medisupply-config }
+          readinessProbe:
+            httpGet: { path: /health, port: 9007 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 9007 }
+            initialDelaySeconds: 15
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
