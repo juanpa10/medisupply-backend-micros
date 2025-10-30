@@ -17,7 +17,8 @@ spec:
           image: REPLACED_BY_PIPELINE
           imagePullPolicy: Always
           command: ["/bin/sh", "-c"]
-          args: ["python init_db.py || true; python scripts/ensure_jan2025.py || true"]
+          # Run init scripts; do not swallow errors so CI can detect failures
+          args: ["python init_db.py; python scripts/ensure_jan2025.py"]
           env:
             - name: DB_HOST
               value: "postgres.medisupply.svc.cluster.local"
