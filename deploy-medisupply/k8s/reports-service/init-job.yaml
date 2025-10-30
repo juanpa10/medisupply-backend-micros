@@ -18,8 +18,15 @@ spec:
           imagePullPolicy: Always
           command: ["/bin/sh", "-c"]
           # Run init scripts; do not swallow errors so CI can detect failures
-          args: ["python init_db.py; python scripts/ensure_jan2025.py"]
+          # Ensure we run from /app and that Python can import the top-level
+          # `app` package. When a script is executed directly (python scripts/foo.py)
+          # sys.path[0] becomes the script's directory which prevents sibling
+          # packages (like /app/app) from being discovered. Setting PYTHONPATH
+          # and running commands from /app avoids ModuleNotFoundError.
+          args: ["cd /app && PYTHONPATH=/app python init_db.py && PYTHONPATH=/app python scripts/ensure_jan2025.py"]
           env:
+            - name: PYTHONPATH
+              value: "/app"
             - name: DB_HOST
               value: "postgres.medisupply.svc.cluster.local"
             - name: DB_PORT
