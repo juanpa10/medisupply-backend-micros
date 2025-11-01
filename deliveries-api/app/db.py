@@ -15,7 +15,7 @@ if not DB_URL:
             DB_URL = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
 
 if not DB_URL:
-    DB_URL = "sqlite:///roles_simple.db"  
+    DB_URL = "sqlite:///deliveries.db"  
     
 engine = create_engine(DB_URL, echo=False, future=True)
 
