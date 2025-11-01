@@ -153,3 +153,8 @@ spec:
       services:
         - name: reports-service
           port: 9007
+    - kind: Rule
+      match: PathPrefix(`/deliveries`)
+      services:
+        - name: deliveries-api      # EXISTE
+          port: 9021
