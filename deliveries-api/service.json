@@ -1,0 +1,7 @@
+{
+  "name": "deliveries-api",
+  "port": 9021,
+  "language": "python",
+  "framework": "flask",
+  "description": "Microservicio de entregas: crear y consultar entregas por pedido/cliente."
+}
