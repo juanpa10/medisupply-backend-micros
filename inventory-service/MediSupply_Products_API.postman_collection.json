@@ -1,0 +1,967 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890",
+		"name": "MediSupply - Products API",
+		"description": "API completa para gestión de productos en el módulo de inventarios de MediSupply\n\n## Funcionalidades:\n- Gestión CRUD de productos\n- Upload y gestión de documentos técnicos\n- Gestión de datos maestros (categorías, unidades, proveedores)\n- Búsqueda y filtrado de productos\n- Control de disponibilidad en catálogo\n\n## Autenticación:\nTodos los endpoints (excepto documentación) requieren JWT token en el header Authorization.\n\n## Variables de entorno necesarias:\n- `base_url`: http://localhost:9008\n- `auth_token`: Token JWT obtenido del auth-service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "📚 Documentation",
+			"item": [
+				{
+					"name": "Get API Documentation",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/docs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"docs"
+							]
+						},
+						"description": "Obtiene la documentación completa de todos los endpoints disponibles"
+					}
+				}
+			]
+		},
+		{
+			"name": "🏷️ Master Data - Categories",
+			"item": [
+				{
+					"name": "List Categories",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categorias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"categorias"
+							]
+						},
+						"description": "Obtiene la lista de todas las categorías disponibles"
+					}
+				},
+				{
+					"name": "Create Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"nombre\": \"Analgésicos\",\n    \"descripcion\": \"Medicamentos para el alivio del dolor\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/categorias",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"categorias"
+							]
+						},
+						"description": "Crea una nueva categoría de productos"
+					}
+				},
+				{
+					"name": "Get Category by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/categorias/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"categorias",
+								"1"
+							]
+						},
+						"description": "Obtiene los detalles de una categoría específica"
+					}
+				}
+			]
+		},
+		{
+			"name": "📏 Master Data - Units",
+			"item": [
+				{
+					"name": "List Units of Measure",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/unidades-medida",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"unidades-medida"
+							]
+						},
+						"description": "Obtiene la lista de todas las unidades de medida disponibles"
+					}
+				},
+				{
+					"name": "Create Unit of Measure",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"nombre\": \"Tabletas\",\n    \"abreviatura\": \"tab\",\n    \"descripcion\": \"Tabletas o comprimidos\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/unidades-medida",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"unidades-medida"
+							]
+						},
+						"description": "Crea una nueva unidad de medida"
+					}
+				},
+				{
+					"name": "Get Unit by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/unidades-medida/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"unidades-medida",
+								"1"
+							]
+						},
+						"description": "Obtiene los detalles de una unidad de medida específica"
+					}
+				}
+			]
+		},
+		{
+			"name": "🏢 Master Data - Suppliers",
+			"item": [
+				{
+					"name": "List Suppliers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/proveedores",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"proveedores"
+							]
+						},
+						"description": "Obtiene la lista de todos los proveedores registrados"
+					}
+				},
+				{
+					"name": "Create Supplier",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"nombre\": \"Laboratorios ABC\",\n    \"nit\": \"123456789-1\",\n    \"contacto\": \"Juan Pérez\",\n    \"telefono\": \"+57 1 234-5678\",\n    \"email\": \"contacto@laboratoriosABC.com\",\n    \"direccion\": \"Carrera 10 #20-30, Bogotá\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/proveedores",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"proveedores"
+							]
+						},
+						"description": "Registra un nuevo proveedor"
+					}
+				},
+				{
+					"name": "Get Supplier by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/proveedores/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"proveedores",
+								"1"
+							]
+						},
+						"description": "Obtiene los detalles de un proveedor específico"
+					}
+				}
+			]
+		},
+		{
+			"name": "🏷️ Products CRUD",
+			"item": [
+				{
+					"name": "List Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products?page=1&per_page=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Página actual"
+								},
+								{
+									"key": "per_page",
+									"value": "10",
+									"description": "Elementos por página"
+								},
+								{
+									"key": "categoria_id",
+									"value": "1",
+									"disabled": true,
+									"description": "Filtrar por categoría"
+								},
+								{
+									"key": "proveedor_id",
+									"value": "1",
+									"disabled": true,
+									"description": "Filtrar por proveedor"
+								},
+								{
+									"key": "disponible_catalogo",
+									"value": "true",
+									"disabled": true,
+									"description": "Solo productos disponibles en catálogo"
+								}
+							]
+						},
+						"description": "Obtiene la lista paginada de productos con filtros opcionales"
+					}
+				},
+				{
+					"name": "Search Products",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/search?q=paracetamol",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"search"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "paracetamol",
+									"description": "Término de búsqueda"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"disabled": true
+								},
+								{
+									"key": "per_page",
+									"value": "10",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Busca productos por nombre o descripción"
+					}
+				},
+				{
+					"name": "Create Product (Basic)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "nombre",
+									"value": "Paracetamol 500mg",
+									"type": "text"
+								},
+								{
+									"key": "descripcion",
+									"value": "Analgésico y antipirético para el alivio del dolor y fiebre",
+									"type": "text"
+								},
+								{
+									"key": "categoria_id",
+									"value": "1",
+									"type": "text"
+								},
+								{
+									"key": "unidad_medida_id",
+									"value": "9",
+									"type": "text"
+								},
+								{
+									"key": "proveedor_id",
+									"value": "6",
+									"type": "text"
+								},
+								{
+									"key": "precio_compra",
+									"value": "2000.00",
+									"type": "text"
+								},
+								{
+									"key": "precio_venta",
+									"value": "2500.00",
+									"type": "text"
+								},
+								{
+									"key": "codigo",
+									"value": "PAR-500-001",
+									"type": "text"
+								},
+								{
+									"key": "requiere_ficha_tecnica",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "requiere_condiciones_almacenamiento",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "requiere_certificaciones_sanitarias",
+									"value": "true",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							]
+						},
+						"description": "Crea un producto básico sin archivos adjuntos usando form-data"
+					}
+				},
+				{
+					"name": "Create Product with Files",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "nombre",
+									"value": "Ibuprofeno 600mg",
+									"type": "text"
+								},
+								{
+									"key": "descripcion",
+									"value": "Antiinflamatorio no esteroideo para dolor e inflamación",
+									"type": "text"
+								},
+								{
+									"key": "categoria_id",
+									"value": "2",
+									"type": "text"
+								},
+								{
+									"key": "unidad_medida_id",
+									"value": "9",
+									"type": "text"
+								},
+								{
+									"key": "proveedor_id",
+									"value": "6",
+									"type": "text"
+								},
+								{
+									"key": "precio_compra",
+									"value": "3000.00",
+									"type": "text"
+								},
+								{
+									"key": "precio_venta",
+									"value": "3500.00",
+									"type": "text"
+								},
+								{
+									"key": "codigo",
+									"value": "IBU-600-001",
+									"type": "text"
+								},
+								{
+									"key": "requiere_ficha_tecnica",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "requiere_condiciones_almacenamiento",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "requiere_certificaciones_sanitarias",
+									"value": "true",
+									"type": "text"
+								},
+								{
+									"key": "ficha_tecnica",
+									"type": "file",
+									"description": "Archivo PDF con ficha técnica del producto"
+								},
+								{
+									"key": "condiciones",
+									"type": "file",
+									"description": "Archivo con condiciones de almacenamiento"
+								},
+								{
+									"key": "certificaciones",
+									"type": "file",
+									"description": "Archivo con certificaciones sanitarias"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							]
+						},
+						"description": "Crea un producto con archivos adjuntos usando multipart/form-data"
+					}
+				},
+				{
+					"name": "Get Product by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"1"
+							]
+						},
+						"description": "Obtiene los detalles completos de un producto específico"
+					}
+				},
+				{
+					"name": "Update Product",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "nombre",
+									"value": "Paracetamol 500mg (Actualizado)",
+									"type": "text"
+								},
+								{
+									"key": "descripcion",
+									"value": "Analgésico y antipirético mejorado para el alivio del dolor y fiebre",
+									"type": "text"
+								},
+								{
+									"key": "precio_compra",
+									"value": "2000.00",
+									"type": "text"
+								},
+								{
+									"key": "precio_venta",
+									"value": "2800.00",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"1"
+							]
+						},
+						"description": "Actualiza los datos de un producto existente"
+					}
+				},
+				{
+					"name": "Delete Product",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"1"
+							]
+						},
+						"description": "Elimina un producto del sistema"
+					}
+				}
+			]
+		},
+		{
+			"name": "📎 File Management",
+			"item": [
+				{
+					"name": "Upload Additional Files",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "ficha_tecnica",
+									"type": "file",
+									"description": "Archivo de ficha técnica"
+								},
+								{
+									"key": "condiciones",
+									"type": "file",
+									"description": "Archivo de condiciones de almacenamiento"
+								},
+								{
+									"key": "certificaciones",
+									"type": "file",
+									"description": "Archivo de certificaciones sanitarias"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/1/files",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"1",
+								"files"
+							]
+						},
+						"description": "Sube archivos adicionales a un producto existente"
+					}
+				},
+				{
+					"name": "Download File",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/files/1/download",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"files",
+								"1",
+								"download"
+							]
+						},
+						"description": "Descarga un archivo específico asociado a un producto"
+					}
+				},
+				{
+					"name": "Delete File",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/files/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"files",
+								"1"
+							]
+						},
+						"description": "Elimina un archivo específico de un producto"
+					}
+				}
+			]
+		},
+		{
+			"name": "🔍 Catalog & Status",
+			"item": [
+				{
+					"name": "Products Available in Catalog",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products?disponible_catalogo=true",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							],
+							"query": [
+								{
+									"key": "disponible_catalogo",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Obtiene solo los productos que están disponibles en el catálogo (con todos los documentos requeridos)"
+					}
+				},
+				{
+					"name": "Products Not in Catalog",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products?disponible_catalogo=false",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products"
+							],
+							"query": [
+								{
+									"key": "disponible_catalogo",
+									"value": "false"
+								}
+							]
+						},
+						"description": "Obtiene los productos que NO están disponibles en el catálogo (les faltan documentos)"
+					}
+				},
+				{
+					"name": "Get Product Catalog Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/products/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"products",
+								"1"
+							]
+						},
+						"description": "Verifica el estado de un producto específico en el catálogo (campo disponible_en_catalogo)"
+					}
+				}
+			]
+		},
+		{
+			"name": "🔐 Authentication Helper",
+			"item": [
+				{
+					"name": "Get Auth Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@medisupply.com\",\n    \"password\": \"Admin#123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:9001/api/v1/auth/login",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "9001",
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Obtiene un token JWT del auth-service para usar en los otros endpoints.\n\nCopia el token de la respuesta y úsalo en la variable de entorno 'auth_token'."
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:9008",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "your_jwt_token_here",
+			"type": "string"
+		}
+	]
+}

@@ -12,32 +12,12 @@ sys.path.insert(0, str(root_dir))
 from app import create_app
 from app.config.database import db
 from app.modules.inventory.models import InventoryItem
-from app.modules.inventory.product_model import Product
+from app.modules.products.models import Product, Categoria, UnidadMedida, Proveedor
 from sqlalchemy import Column, Integer, String
 from datetime import date, timedelta
 
 
-# Modelos mock para tablas referenciadas por Product (solo para tests)
-class Categoria(db.Model):
-    """Modelo mock de categorías para tests"""
-    __tablename__ = 'categorias'
-    id = Column(Integer, primary_key=True)
-    nombre = Column(String(100))
-
-
-class UnidadMedida(db.Model):
-    """Modelo mock de unidades de medida para tests"""
-    __tablename__ = 'unidades_medida'
-    id = Column(Integer, primary_key=True)
-    nombre = Column(String(50))
-    abreviatura = Column(String(10))
-
-
-class Proveedor(db.Model):
-    """Modelo mock de proveedores para tests"""
-    __tablename__ = 'proveedores'
-    id = Column(Integer, primary_key=True)
-    nombre = Column(String(200))
+# Ya no necesitamos modelos mock porque usamos los reales de app.modules.products.models
 
 
 @pytest.fixture(scope='function')
