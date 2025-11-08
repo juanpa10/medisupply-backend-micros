@@ -21,8 +21,9 @@ from app import create_app
 from app.config.database import db
 from sqlalchemy import text
 from app.modules.inventory.models import InventoryItem, InventoryMovement
-from app.modules.inventory.product_model import Product
 from app.shared.enums import InventoryStatus, MovementType
+
+# Note: Product model not imported as we use raw SQL for products table
 
 
 def drop_all_tables():
