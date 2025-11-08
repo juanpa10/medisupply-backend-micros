@@ -6,7 +6,8 @@ from datetime import date, datetime
 from sqlalchemy import or_, and_, func
 from app.shared.base_repository import BaseRepository
 from app.modules.inventory.models import InventoryItem, InventoryMovement
-from app.modules.inventory.product_model import Product
+# Import the new Product model from products module instead of the old read-only one
+from app.modules.products.models import Product
 from app.shared.enums import InventoryStatus, MovementType
 from app.core.utils.logger import get_logger
 from app.config.database import db

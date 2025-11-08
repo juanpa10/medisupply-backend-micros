@@ -42,6 +42,10 @@ class Config:
     # Cache (opcional)
     REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
     CACHE_ENABLED = os.environ.get('CACHE_ENABLED', 'False').lower() == 'true'
+    
+    # File Uploads
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads/products')
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', str(5 * 1024 * 1024)))  # 5MB default
 
 
 class DevelopmentConfig(Config):
