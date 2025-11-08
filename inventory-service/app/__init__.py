@@ -41,10 +41,17 @@ def create_app(config_name=None):
     # Registrar blueprints
     with app.app_context():
         from app.modules.inventory.routes import inventory_bp
-        from app.modules.products.routes import products_bp
         
         app.register_blueprint(inventory_bp)
-        app.register_blueprint(products_bp)
+        
+        # Import products blueprint safely
+        try:
+            from app.modules.products.routes import products_bp
+            app.register_blueprint(products_bp)
+            print("✓ Products module loaded successfully")
+        except Exception as e:
+            print(f"⚠ Warning: Products module failed to load: {e}")
+            # Application continues without products module
 
         # Auto-create tables on startup (similar behaviour to video-api)
         # Controlled by env var AUTO_CREATE_TABLES (default: true for local/dev)
