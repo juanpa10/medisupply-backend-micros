@@ -1,0 +1,4 @@
+nombre,codigo,descripcion,categoria_id,unidad_medida_id,proveedor_id,precio_compra,precio_venta
+Jeringa Desechable 10ml,JER-10ML,Jeringa de 10ml para uso médico,1,1,1,1.50,2.25
+Mascarilla N95,MASC-N95,Mascarilla de protección respiratoria N95,2,2,2,0.85,1.50
+Gasas Estériles,GAS-EST,Gasas estériles de algodón 5x5cm,3,3,1,0.25,0.75

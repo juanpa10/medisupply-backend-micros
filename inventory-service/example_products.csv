@@ -1,0 +1,6 @@
+nombre,codigo,descripcion,categoria_id,unidad_medida_id,proveedor_id,referencia,precio_compra,precio_venta,requiere_ficha_tecnica,requiere_condiciones_almacenamiento,requiere_certificaciones_sanitarias
+"Acetaminofen 500mg","ACET-500-001","Analgésico y antipirético para el alivio del dolor y la fiebre",1,1,1,"REF-ACET-500",1000.00,1500.00,false,false,false
+"Ibuprofeno 600mg","IBU-600-001","Antiinflamatorio no esteroideo para dolor e inflamación",1,1,1,"REF-IBU-600",1200.00,1800.00,true,false,true
+"Amoxicilina 875mg","AMOX-875-001","Antibiótico de amplio espectro",1,1,1,"REF-AMOX-875",2000.00,2800.00,true,true,true
+"Loratadina 10mg","LORA-10-001","Antihistamínico para alergias",1,1,1,"REF-LORA-10",800.00,1200.00,false,false,false
+"Ranitidina 150mg","RANI-150-001","Bloqueador de histamina H2 para acidez",1,1,1,"REF-RANI-150",600.00,900.00,true,false,true

@@ -394,6 +394,295 @@ class ProductService:
         """
         upload_path = current_app.config.get('UPLOAD_FOLDER', 'uploads/products')
         return Path(upload_path)
+    
+    def bulk_upload_products(
+        self,
+        csv_file: FileStorage,
+        current_user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Carga masiva de productos desde archivo CSV
+        
+        Args:
+            csv_file: Archivo CSV con los datos de productos
+            current_user: Usuario actual
+            
+        Returns:
+            Dict con resumen de la operación
+        """
+        import csv
+        import io
+        from app.modules.products.schemas import ProductBulkUploadSchema
+        
+        logger.info(f"Iniciando carga masiva de productos por usuario: {current_user}")
+        
+        # Validar archivo
+        if not csv_file or not csv_file.filename:
+            raise ValidationError("No se proporcionó archivo CSV")
+        
+        if not csv_file.filename.lower().endswith('.csv'):
+            raise ValidationError("El archivo debe ser un CSV")
+        
+        # Leer contenido del archivo
+        try:
+            # Decodificar contenido del CSV
+            content = csv_file.read().decode('utf-8-sig')  # utf-8-sig maneja BOM de Excel
+            csv_data = io.StringIO(content)
+            csv_reader = csv.DictReader(csv_data)
+            
+        except UnicodeDecodeError:
+            # Intentar con latin1 si UTF-8 falla
+            csv_file.seek(0)
+            content = csv_file.read().decode('latin1')
+            csv_data = io.StringIO(content)
+            csv_reader = csv.DictReader(csv_data)
+        except Exception as e:
+            raise ValidationError(f"Error al leer archivo CSV: {str(e)}")
+        
+        # Validar estructura del CSV
+        expected_columns = {
+            'nombre', 'codigo', 'descripcion', 'categoria_id', 
+            'unidad_medida_id', 'proveedor_id'
+        }
+        optional_columns = {
+            'referencia', 'precio_compra', 'precio_venta',
+            'requiere_ficha_tecnica', 'requiere_condiciones_almacenamiento',
+            'requiere_certificaciones_sanitarias'
+        }
+        
+        if not csv_reader.fieldnames:
+            raise ValidationError("El archivo CSV está vacío o no tiene encabezados")
+        
+        csv_columns = set(col.strip().lower() for col in csv_reader.fieldnames if col)
+        missing_required = expected_columns - csv_columns
+        
+        if missing_required:
+            raise ValidationError(
+                f"El CSV debe contener las columnas obligatorias: {', '.join(sorted(missing_required))}"
+            )
+        
+        # Procesar filas del CSV
+        schema = ProductBulkUploadSchema()
+        results = {
+            'success_count': 0,
+            'error_count': 0,
+            'errors': [],
+            'created_products': []
+        }
+        
+        row_number = 1  # Para reportar errores
+        
+        for row in csv_reader:
+            row_number += 1
+            
+            try:
+                # Limpiar datos de la fila
+                clean_row = {}
+                for key, value in row.items():
+                    if key and value is not None:
+                        clean_key = key.strip().lower()
+                        clean_value = str(value).strip() if value else None
+                        
+                        # Convertir valores booleanos
+                        if clean_key.startswith('requiere_'):
+                            if clean_value and clean_value.lower() in ('true', '1', 'sí', 'si', 'yes'):
+                                clean_value = True
+                            elif clean_value and clean_value.lower() in ('false', '0', 'no'):
+                                clean_value = False
+                            else:
+                                clean_value = False
+                        
+                        # Convertir valores numéricos
+                        if clean_key.endswith('_id') and clean_value:
+                            try:
+                                clean_value = int(clean_value)
+                            except ValueError:
+                                raise ValidationError(f"El campo {clean_key} debe ser un número entero")
+                        
+                        if clean_key.startswith('precio_') and clean_value:
+                            try:
+                                clean_value = float(clean_value)
+                            except ValueError:
+                                raise ValidationError(f"El campo {clean_key} debe ser un número decimal")
+                        
+                        clean_row[clean_key] = clean_value
+                
+                # Validar datos con schema
+                validated_data = schema.load(clean_row)
+                
+                # Verificar que no existe producto con el mismo código
+                existing = self.product_repo.get_product_by_codigo(validated_data['codigo'])
+                if existing:
+                    raise ConflictError(f"Ya existe un producto con código '{validated_data['codigo']}'")
+                
+                # Validar foreign keys
+                self._validate_foreign_keys(validated_data)
+                
+                # Agregar usuario creador
+                if current_user:
+                    validated_data['created_by'] = current_user
+                
+                # Crear producto
+                product = self.product_repo.create_product(validated_data)
+                
+                results['created_products'].append({
+                    'id': product.id,
+                    'codigo': product.codigo,
+                    'nombre': product.nombre
+                })
+                results['success_count'] += 1
+                
+                logger.info(f"Producto creado desde CSV: {product.codigo} - {product.nombre}")
+                
+            except Exception as e:
+                error_msg = f"Fila {row_number}: {str(e)}"
+                results['errors'].append(error_msg)
+                results['error_count'] += 1
+                logger.warning(f"Error procesando fila {row_number}: {str(e)}")
+        
+        # Log final
+        logger.info(f"Carga masiva completada - Exitosos: {results['success_count']}, Errores: {results['error_count']}")
+        
+        return results
+    
+    def bulk_upload_products_from_content(
+        self,
+        csv_content: str,
+        current_user: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Carga masiva de productos desde contenido CSV directo
+        
+        Args:
+            csv_content: Contenido del CSV como string
+            current_user: Usuario actual
+            
+        Returns:
+            Dict con resumen de la operación
+        """
+        import csv
+        import io
+        from app.modules.products.schemas import ProductBulkUploadSchema
+        
+        logger.info(f"Iniciando carga masiva de productos desde contenido CSV por usuario: {current_user}")
+        
+        # Validar contenido
+        if not csv_content or not csv_content.strip():
+            raise ValidationError("El contenido CSV está vacío")
+        
+        # Leer contenido del CSV
+        try:
+            csv_data = io.StringIO(csv_content)
+            csv_reader = csv.DictReader(csv_data)
+            
+        except Exception as e:
+            raise ValidationError(f"Error al procesar contenido CSV: {str(e)}")
+        
+        # Validar estructura del CSV
+        expected_columns = {
+            'nombre', 'codigo', 'descripcion', 'categoria_id', 
+            'unidad_medida_id', 'proveedor_id'
+        }
+        optional_columns = {
+            'referencia', 'precio_compra', 'precio_venta',
+            'requiere_ficha_tecnica', 'requiere_condiciones_almacenamiento',
+            'requiere_certificaciones_sanitarias'
+        }
+        
+        if not csv_reader.fieldnames:
+            raise ValidationError("El CSV está vacío o no tiene encabezados")
+        
+        csv_columns = set(col.strip().lower() for col in csv_reader.fieldnames if col)
+        missing_required = expected_columns - csv_columns
+        
+        if missing_required:
+            raise ValidationError(
+                f"El CSV debe contener las columnas obligatorias: {', '.join(sorted(missing_required))}"
+            )
+        
+        # Procesar filas del CSV
+        schema = ProductBulkUploadSchema()
+        results = {
+            'success_count': 0,
+            'error_count': 0,
+            'errors': [],
+            'created_products': []
+        }
+        
+        row_number = 1  # Para reportar errores
+        
+        for row in csv_reader:
+            row_number += 1
+            
+            try:
+                # Limpiar datos de la fila
+                clean_row = {}
+                for key, value in row.items():
+                    if key and value is not None:
+                        clean_key = key.strip().lower()
+                        clean_value = str(value).strip() if value else None
+                        
+                        # Convertir valores booleanos
+                        if clean_key.startswith('requiere_'):
+                            if clean_value and clean_value.lower() in ('true', '1', 'sí', 'si', 'yes'):
+                                clean_value = True
+                            elif clean_value and clean_value.lower() in ('false', '0', 'no'):
+                                clean_value = False
+                            else:
+                                clean_value = False
+                        
+                        # Convertir valores numéricos
+                        if clean_key.endswith('_id') and clean_value:
+                            try:
+                                clean_value = int(clean_value)
+                            except ValueError:
+                                raise ValidationError(f"El campo {clean_key} debe ser un número entero")
+                        
+                        if clean_key.startswith('precio_') and clean_value:
+                            try:
+                                clean_value = float(clean_value)
+                            except ValueError:
+                                raise ValidationError(f"El campo {clean_key} debe ser un número decimal")
+                        
+                        clean_row[clean_key] = clean_value
+                
+                # Validar datos con schema
+                validated_data = schema.load(clean_row)
+                
+                # Verificar que no existe producto con el mismo código
+                existing = self.product_repo.get_product_by_codigo(validated_data['codigo'])
+                if existing:
+                    raise ConflictError(f"Ya existe un producto con código '{validated_data['codigo']}'")
+                
+                # Validar foreign keys
+                self._validate_foreign_keys(validated_data)
+                
+                # Agregar usuario creador
+                if current_user:
+                    validated_data['created_by'] = current_user
+                
+                # Crear producto
+                product = self.product_repo.create_product(validated_data)
+                
+                results['created_products'].append({
+                    'id': product.id,
+                    'codigo': product.codigo,
+                    'nombre': product.nombre
+                })
+                results['success_count'] += 1
+                
+                logger.info(f"Producto creado desde CSV: {product.codigo} - {product.nombre}")
+                
+            except Exception as e:
+                error_msg = f"Fila {row_number}: {str(e)}"
+                results['errors'].append(error_msg)
+                results['error_count'] += 1
+                logger.warning(f"Error procesando fila {row_number}: {str(e)}")
+        
+        # Log final
+        logger.info(f"Carga masiva completada - Exitosos: {results['success_count']}, Errores: {results['error_count']}")
+        
+        return results
 
 
 class CategoriaService:

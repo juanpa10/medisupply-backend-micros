@@ -395,6 +395,111 @@ class ProductController:
         except Exception as e:
             logger.exception("Error al obtener productos con documentos faltantes")
             return error_response(message='Error interno del servidor', status_code=500)
+    
+    def bulk_upload_products(self):
+        """
+        POST /api/v1/products/bulk-upload
+        
+        Carga masiva de productos desde archivo CSV
+        
+        Admite dos formatos:
+        1. Content-Type: multipart/form-data con campo 'csv_file'
+        2. Content-Type: text/csv con el contenido CSV en el body
+        
+        Form fields (para multipart):
+        - csv_file (required): Archivo CSV con productos
+        
+        Raw body (para text/csv):
+        - Contenido CSV directo
+        
+        Estructura esperada del CSV:
+        nombre,codigo,descripcion,categoria_id,unidad_medida_id,proveedor_id,referencia,precio_compra,precio_venta,requiere_ficha_tecnica,requiere_condiciones_almacenamiento,requiere_certificaciones_sanitarias
+        """
+        try:
+            current_user = getattr(g, 'username', 'system')
+            csv_content = None
+            
+            # Detectar formato del request
+            content_type = request.content_type or ''
+            
+            if 'multipart/form-data' in content_type:
+                # Formato multipart/form-data
+                if 'csv_file' not in request.files:
+                    return error_response(
+                        message='No se proporcionó archivo CSV',
+                        status_code=400
+                    )
+                
+                csv_file = request.files['csv_file']
+                
+                if not csv_file or not csv_file.filename:
+                    return error_response(
+                        message='No se seleccionó archivo',
+                        status_code=400
+                    )
+                
+                # Leer contenido del archivo
+                try:
+                    csv_content = csv_file.read().decode('utf-8-sig')
+                except UnicodeDecodeError:
+                    csv_file.seek(0)
+                    csv_content = csv_file.read().decode('latin1')
+                    
+            elif 'text/csv' in content_type:
+                # Formato CSV directo en el body
+                try:
+                    csv_content = request.get_data(as_text=True)
+                    if not csv_content:
+                        return error_response(
+                            message='El contenido CSV está vacío',
+                            status_code=400
+                        )
+                except Exception as e:
+                    return error_response(
+                        message=f'Error al leer contenido CSV: {str(e)}',
+                        status_code=400
+                    )
+            else:
+                return error_response(
+                    message=f'Content-Type "{content_type}" no soportado. Use multipart/form-data o text/csv',
+                    status_code=400
+                )
+            
+            if not csv_content:
+                return error_response(
+                    message='No se pudo obtener contenido CSV',
+                    status_code=400
+                )
+            
+            # Procesar carga masiva con contenido CSV
+            results = self.service.bulk_upload_products_from_content(csv_content, current_user)
+            
+            # Determinar status code según resultados
+            if results['error_count'] == 0:
+                status_code = 201  # Todos exitosos
+                message = f"Todos los {results['success_count']} productos fueron creados exitosamente"
+            elif results['success_count'] == 0:
+                status_code = 400  # Todos fallaron
+                message = f"No se pudo crear ningún producto. {results['error_count']} errores encontrados"
+            else:
+                status_code = 207  # Multi-status (algunos exitosos, algunos fallaron)
+                message = f"Carga parcialmente exitosa: {results['success_count']} creados, {results['error_count']} errores"
+            
+            return success_response(
+                data=results,
+                message=message,
+                status_code=status_code
+            )
+            
+        except AppValidationError as e:
+            return error_response(message=str(e), status_code=400)
+        except ConflictError as e:
+            return error_response(message=str(e), status_code=409)
+        except BusinessError as e:
+            return error_response(message=str(e), status_code=500)
+        except Exception as e:
+            logger.exception("Error inesperado en carga masiva")
+            return error_response(message='Error interno del servidor', status_code=500)
 
 
 class CategoriaController:

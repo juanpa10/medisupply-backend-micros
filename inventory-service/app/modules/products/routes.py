@@ -52,6 +52,57 @@ def create_product():
     return product_controller.create_product()
 
 
+@products_bp.route('/products/bulk-upload', methods=['POST'])
+@require_auth
+def bulk_upload_products():
+    """
+    Carga masiva de productos desde archivo CSV
+    
+    Admite dos formatos de Content-Type:
+    1. multipart/form-data - Subida de archivo CSV
+    2. text/csv - Contenido CSV directo en el body
+    
+    ## Formato 1: multipart/form-data
+    Form fields:
+    - csv_file (required): Archivo CSV con los productos a cargar
+    
+    ## Formato 2: text/csv
+    Body: Contenido CSV directo como texto
+    Headers: Content-Type: text/csv; charset=utf-8
+    
+    ## Estructura CSV requerida:
+    Columnas obligatorias:
+    - nombre: Nombre del producto
+    - codigo: Código único del producto
+    - descripcion: Descripción del producto  
+    - categoria_id: ID de la categoría
+    - unidad_medida_id: ID de la unidad de medida
+    - proveedor_id: ID del proveedor
+    
+    Columnas opcionales:
+    - referencia: Referencia del producto
+    - precio_compra: Precio de compra (decimal)
+    - precio_venta: Precio de venta (decimal)
+    - requiere_ficha_tecnica: true/false
+    - requiere_condiciones_almacenamiento: true/false
+    - requiere_certificaciones_sanitarias: true/false
+    
+    ## Ejemplo CSV:
+    ```csv
+    nombre,codigo,descripcion,categoria_id,unidad_medida_id,proveedor_id,precio_compra,precio_venta,requiere_ficha_tecnica
+    Jeringa 10ml,JER-10ML,Jeringa desechable de 10ml,1,1,1,1.50,2.25,true
+    Mascarilla N95,MASC-N95,Mascarilla de protección N95,2,2,2,0.85,1.50,false
+    ```
+    
+    ## Responses:
+    - 201: Todos los productos creados exitosamente
+    - 207: Algunos productos creados, algunos con errores (multi-status)
+    - 400: Ningún producto creado debido a errores de validación
+    - 409: Conflictos (códigos duplicados)
+    """
+    return product_controller.bulk_upload_products()
+
+
 @products_bp.route('/products/<int:product_id>', methods=['GET'])
 @require_auth
 def get_product(product_id):
