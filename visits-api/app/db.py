@@ -15,7 +15,7 @@ if not DB_URL:
             DB_URL = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}"
 
 if not DB_URL:
-    DB_URL = "sqlite:///deliveries.db"  
+    DB_URL = "sqlite:///visits.db"  
 
 engine = create_engine(DB_URL, echo=False, future=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, future=True)
