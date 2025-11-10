@@ -171,3 +171,8 @@ spec:
       services:
         - name: deliveries-api      # EXISTE
           port: 9021
+    - kind: Rule
+      match: PathPrefix(`/visits`)
+      services:
+        - name: visits-api      # EXISTE
+          port: 9022
