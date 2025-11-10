@@ -89,7 +89,9 @@ class ProductController:
             
         except MarshmallowValidationError as e:
             return error_response(message='Datos de entrada inválidos', errors=e.messages, status_code=400)
-        except (AppValidationError, ConflictError) as e:
+        except ConflictError as e:
+            return error_response(message=str(e), status_code=409)
+        except AppValidationError as e:
             return error_response(message=str(e), status_code=400)
         except BusinessError as e:
             return error_response(message=str(e), status_code=500)
@@ -158,7 +160,9 @@ class ProductController:
             return error_response(message='Datos de entrada inválidos', errors=e.messages, status_code=400)
         except ResourceNotFoundError as e:
             return error_response(message=str(e), status_code=404)
-        except (AppValidationError, ConflictError) as e:
+        except ConflictError as e:
+            return error_response(message=str(e), status_code=409)
+        except AppValidationError as e:
             return error_response(message=str(e), status_code=400)
         except BusinessError as e:
             return error_response(message=str(e), status_code=500)
