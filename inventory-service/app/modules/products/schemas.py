@@ -404,3 +404,88 @@ class ProveedorCreateSchema(Schema):
         allow_none=True,
         validate=validate.Length(max=50, error="El país no puede exceder 50 caracteres")
     )
+
+
+class ProductBulkUploadSchema(Schema):
+    """Esquema para carga masiva de productos desde CSV"""
+    
+    # Campos obligatorios para cada fila del CSV
+    nombre = fields.Str(
+        required=True,
+        validate=[
+            validate.Length(min=2, max=200, error="El nombre debe tener entre 2 y 200 caracteres"),
+        ],
+        error_messages={'required': 'El nombre es obligatorio'}
+    )
+    
+    codigo = fields.Str(
+        required=True,
+        validate=[
+            validate.Length(min=3, max=50, error="El código debe tener entre 3 y 50 caracteres"),
+            validate.Regexp(r'^[A-Z0-9\-]+$', error="El código solo puede contener letras mayúsculas, números y guiones")
+        ],
+        error_messages={'required': 'El código es obligatorio'}
+    )
+    
+    descripcion = fields.Str(
+        required=True,
+        validate=validate.Length(min=5, max=1000, error="La descripción debe tener entre 5 y 1000 caracteres"),
+        error_messages={'required': 'La descripción es obligatoria'}
+    )
+    
+    categoria_id = fields.Int(
+        required=True,
+        validate=validate.Range(min=1, error="El ID de categoría debe ser mayor a 0"),
+        error_messages={'required': 'La categoría es obligatoria'}
+    )
+    
+    unidad_medida_id = fields.Int(
+        required=True,
+        validate=validate.Range(min=1, error="El ID de unidad de medida debe ser mayor a 0"),
+        error_messages={'required': 'La unidad de medida es obligatoria'}
+    )
+    
+    proveedor_id = fields.Int(
+        required=True,
+        validate=validate.Range(min=1, error="El ID de proveedor debe ser mayor a 0"),
+        error_messages={'required': 'El proveedor es obligatorio'}
+    )
+    
+    # Campos opcionales
+    referencia = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=100, error="La referencia no puede exceder 100 caracteres")
+    )
+    
+    precio_compra = fields.Decimal(
+        required=False,
+        allow_none=True,
+        places=2,
+        validate=validate.Range(min=0, error="El precio de compra debe ser mayor o igual a 0")
+    )
+    
+    precio_venta = fields.Decimal(
+        required=False,
+        allow_none=True,
+        places=2,
+        validate=validate.Range(min=0, error="El precio de venta debe ser mayor o igual a 0")
+    )
+    
+    requiere_ficha_tecnica = fields.Bool(
+        required=False,
+        missing=False,
+        error="Debe ser verdadero o falso"
+    )
+    
+    requiere_condiciones_almacenamiento = fields.Bool(
+        required=False,
+        missing=False,
+        error="Debe ser verdadero o falso"
+    )
+    
+    requiere_certificaciones_sanitarias = fields.Bool(
+        required=False,
+        missing=False,
+        error="Debe ser verdadero o falso"
+    )

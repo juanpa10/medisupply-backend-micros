@@ -1,0 +1,4 @@
+nombre,codigo,descripcion,categoria_id,unidad_medida_id,proveedor_id,referencia,precio_compra,precio_venta,requiere_ficha_tecnica,requiere_condiciones_almacenamiento,requiere_certificaciones_sanitarias
+Acetaminofen 750mg,ACET-750-001,Analgésico y antipirético de acción rápida,1,1,1,REF-ACET-750,800.00,1200.00,false,false,false
+Diclofenaco 50mg,DICLO-50-001,Antiinflamatorio para dolor muscular,1,1,1,REF-DICLO-50,1500.00,2200.00,true,false,true
+Vitamina C 1000mg,VIT-C-1000,Suplemento vitamínico para defensas,1,1,1,REF-VIT-C,500.00,800.00,false,false,false
