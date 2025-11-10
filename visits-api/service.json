@@ -1,0 +1,7 @@
+{
+  "name": "visits-api",
+  "port": 9022,
+  "language": "python",
+  "framework": "flask",
+  "description": "Planificación y registro de visitas con filtros por fechas y comercial."
+}
